@@ -8,6 +8,38 @@ is not mine; this page is about that material.
 
 ## 1. 《明日方舟：终末地》素材 / Arknights: Endfield assets
 
+**来源 / Provenance**
+
+本仓库里的**全部**终末地美术素材，都由作者取自 B 站用户
+**[SealedManx41527](https://space.bilibili.com/2056642352)** 发布的一篇图文：
+
+<https://www.bilibili.com/opus/1237489243187576841>
+
+他那一份同样是从《明日方舟：终末地》的官方素材加工而来。所以链条是：
+
+```
+Hypergryph / GRYPHLINE          ← 官方原作，商标与著作权在这里
+        ↓  加工
+B 站用户 SealedManx41527         ← 本仓库素材的直接来源
+        ↓  发布
+bilibili.com/opus/1237489243187576841
+        ↓  提供
+本仓库                          ← 抠图 / 黑白对调 / 矢量化 / 烘焙背景 / 缩尺寸
+```
+
+**版权归属不因为经手人变化而改变**：这些图形的商标与著作权是
+**© Hypergryph / GRYPHLINE** 的，随本仓库按**同人非商业**用途分发，**不是** MIT 的一部分，
+也不在本仓库的授权范围内。使用即表示你明白这一点。若权利人认为本仓库的分发方式不妥，
+联系作者即可移除。
+
+The Endfield artwork in this repository was obtained by its author from a post by the Bilibili
+user **[SealedManx41527](https://space.bilibili.com/2056642352)**
+(<https://www.bilibili.com/opus/1237489243187576841>), whose own copy is likewise derived from
+official *Arknights: Endfield* material. **The trademark and copyright remain
+© Hypergryph / GRYPHLINE**; it is included for **non-commercial fan use only** and is **not**
+covered by this repository's MIT license. If you fork this, that obligation travels with the
+files.
+
 ### 1.1 标志与图标 / Marks and icons
 
 | 文件 | 内容 |
@@ -20,37 +52,12 @@ is not mine; this page is about that material.
 | `client/assets/endfield-emblem.png` | 徽记冠部线稿（开屏底纹） |
 | `client/assets/endfield-icon.svg` | 站点图标（由徽记冠部矢量化重绘） |
 
-**来源 / Provenance**
-
-这一组标志素材由本仓库作者**从 B 站用户 `SealedManx41527` 处取得**；他那一份同样是从
-《明日方舟：终末地》的官方素材加工而来。所以链条是：
-
-```
-Hypergryph / GRYPHLINE        ← 官方原作，商标与著作权在这里
-        ↓  加工
-B 站用户 SealedManx41527      ← 本站素材的直接来源
-        ↓  提供
-本仓库                        ← 抠图 / 黑白对调 / 矢量化 / 缩尺寸
-```
-
-**版权归属不因为经手人变化而改变**：这些图形的商标与著作权是
-**© Hypergryph / GRYPHLINE** 的，随本仓库按**同人非商业**用途分发，**不是** MIT 的一部分，
-也不在本仓库的授权范围内。使用即表示你明白这一点。
-
-The marks above were obtained by this repository's author **from the Bilibili user
-`SealedManx41527`**, whose own copy is likewise derived from official *Arknights: Endfield*
-material. **The trademark and copyright remain © Hypergryph / GRYPHLINE**; they are included
-for **non-commercial fan use only** and are **not** covered by this repository's MIT license.
-If you fork this, that obligation travels with the files.
-
 ### 1.2 对话区背景 / Conversation backdrop
 
 | 文件 | 内容 |
 | --- | --- |
 | `client/assets/endfield-field.jpg` | 深色背景（由主视觉烘焙：压暗、去饱和、加暗角） |
 | `client/assets/endfield-field-day.jpg` | 浅色背景（同一主视觉的雪原变体） |
-
-同样源自《明日方舟：终末地》官方美术，**© Hypergryph / GRYPHLINE**，同人非商业用途。
 
 想商用的，请自行替换上面这些文件——插件的代码路径不依赖它们的具体内容，只要文件名与尺寸
 保持即可（路由 `/dsh-endfield/assets/*` 按文件名提供）。
