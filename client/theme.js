@@ -157,18 +157,19 @@
   /* ------------------------------------------------------------------ brand */
 
   /**
-   * The product mark, redrawn as the Endfield crest: a solid inverted triangle
-   * with a hazard-yellow inner line. Solid rather than outlined on purpose —
-   * `currentColor` keeps it dark on the pale sidebar and light on the charcoal
-   * one, so the silhouette survives both schemes, which a yellow-only mark does
-   * not.
+   * The sidebar mark is the supplied Endfield lockup itself — crest, wordmark
+   * and triangle — served as a theme asset and chosen by CSS for whichever
+   * sidebar it has to sit on (see 4c in theme.css). At ~28px the wordmark
+   * inside it is not readable and is not meant to be: it reads as the
+   * silhouette, beside the name that spells it out.
+   *
+   * Duotone artwork needs two files rather than one — on the pale sidebar its
+   * white half disappears, on the charcoal sidebar its black half does. The
+   * dark-sidebar file is the same art with black and white swapped.
+   *
+   * Deliberately a background rather than an <img> so the swap is one CSS rule
+   * and the asset never lands in the accessibility tree twice.
    */
-  var BRAND_MARK = '<svg viewBox="0 0 26 22" fill="none" aria-hidden="true">'
-    + '<path d="M1.4 1.6h23.2L13 20.4 1.4 1.6Z" fill="currentColor"/>'
-    + '<path d="M6.6 5.4h12.8L13 15.2 6.6 5.4Z" stroke="#f2f013" stroke-width="1.6" '
-    + 'stroke-linejoin="miter"/>'
-    + '</svg>'
-
   function brandEnabled() {
     try {
       var query = new URLSearchParams(window.location.search)
@@ -198,7 +199,7 @@
     var span = doc.createElement('span')
     span.className = 'ef-brand'
     span.setAttribute('aria-hidden', 'true')
-    span.innerHTML = '<span class="ef-brand__mark">' + BRAND_MARK + '</span>'
+    span.innerHTML = '<span class="ef-brand__mark"></span>'
       + '<span class="ef-brand__name">终末地工业</span>'
       + '<span class="ef-brand__badge">ENDFIELD</span>'
     button.setAttribute('data-ef-brand', 'on')

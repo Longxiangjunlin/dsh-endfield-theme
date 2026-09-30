@@ -940,18 +940,26 @@ html[data-ef-brand='on'] [data-slot='sidebar.brand.name'] {
   min-width: 0;
 }
 
+/* The mark is the supplied Endfield lockup itself, not a redrawn stand-in. It
+   is duotone — 49% of its opaque pixels are black and 46% are white — so one
+   file cannot serve both sidebars: on the pale fill its white half vanishes, on
+   the charcoal fill its black half does. Hence two assets, the second being the
+   same art with the paint inverted and the holes left as holes. At this size the
+   wordmark inside the lockup is not readable and does not need to be; it reads
+   as the crest-over-triangle silhouette next to the name that spells it out. */
 .ef-brand__mark {
-  display: inline-flex;
+  display: inline-block;
   flex: none;
-  width: 22px;
-  height: 19px;
-  color: var(--dsw-alias-label-primary);
+  width: 28px;
+  height: 24px;
+  background-image: url(/dsh-endfield/assets/endfield-lockup-light-bg.png);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
 }
 
-.ef-brand__mark svg {
-  display: block;
-  width: 100%;
-  height: 100%;
+body[data-ds-dark-theme] .ef-brand__mark {
+  background-image: url(/dsh-endfield/assets/endfield-lockup-dark-bg.png);
 }
 
 .ef-brand__name {
