@@ -1,13 +1,14 @@
 # dsh-endfield-theme · 《明日方舟：终末地》主题
 
 为 **DeepSeek Harness Web GUI** 做的一套终末地主题：炭黑工业 HUD + 警戒黄强调色，
-带**开屏动画**与**对话区背景**。它是一个普通的 DSH 客户端插件（host 半区发路由 +
-注入一行脚本，浏览器半区是纯 CSS/JS），不依赖皮肤中心，也不需要构建步骤。
+带**开屏动画**与**对话区背景**。它是一个普通的 DSH 客户端插件（host 半区发一条路由 +
+四条 index 注入行，浏览器半区是纯 CSS/JS），不依赖皮肤中心，也不需要构建步骤。
 
 English: an Arknights: Endfield themed client plugin for the DeepSeek Harness Web
 GUI — charcoal industrial HUD, a single hazard-yellow accent, a boot splash and a
-conversation backdrop. Host half serves assets and injects one script; browser half
-is plain CSS/JS. No build step, no skin center required.
+conversation backdrop. The host half serves one asset route and four
+index-injection rows; the browser half is plain CSS/JS. No build step, no skin
+center required.
 
 ![开屏动画](preview/splash.jpg)
 
@@ -18,7 +19,7 @@ is plain CSS/JS. No build step, no skin center required.
 ## 它做了什么
 
 - **开屏动画** —— 每次文档加载跑一次，约 2.9 s，用的是**官方字标素材**（不是排出来的字）：
-  黑色底 + 44 px 测量网格 + 上下警戒带拉开 → 一枚巨大的终末地三角徽记以 5.5% 白浮出来做底
+  黑色底 + 46 px 测量网格 + 上下警戒带拉开 → 一枚巨大的终末地三角徽记以 5.5% 白浮出来做底
   → 一道警戒黄扫描光带从上扫到下 → **`终末地` 中文字标被一道带亮边的横向擦除从左往右写出来**
   → 细线、`BOOT 100%` 进度条、左下角三行终端自检、右下角英文 `ENDFIELD INDUSTRIES` 小字标
   → 整屏像 CRT 一样纵向收拢消失。随时点击/按键即跳过；`prefers-reduced-motion` 下完全不播。
@@ -53,7 +54,8 @@ is plain CSS/JS. No build step, no skin center required.
 **官方 boot 底色（浅色 `#fff` / 深色 `#151517`）加上外壳第一帧**。要让开屏成为首帧，
 就必须在"外壳渲染之前"进 DOM。
 
-`@deepseek-ai/dsh-web-frontend/dist/assets/index-*.js` 里那个注入行解释器给出两条事实：
+`@deepseek-ai/dsh-web-frontend/dist/assets/index-*.js` 里那个注入行解释器给出两条事实
+（下面是按语义从压缩产物还原的，不是逐字引用）：
 
 ```js
 // ① 六种行全支持
@@ -100,8 +102,11 @@ if (dshDesktopBoot !== undefined) {
 
 ## 右上角那三个按键
 
+> 本节引用的 `lib/main.js`、`lib/preload-app.cjs` 都是 **DSH 桌面端自己的文件**
+> （在安装目录的 `resources/app.asar` 里），不在本仓库内——本仓库的 `lib/` 只有 `index.js`。
+
 它们不是系统标题栏，是本客户端自己的 **Windows Controls Overlay**（`titleBarStyle: "hidden"`
-+ `titleBarOverlay`，高 40 px，见 `lib/main.js`），运行时可以改：
++ `titleBarOverlay`，高 40 px，见 DSH 的 `lib/main.js`），运行时可以改：
 
 ```js
 ipcMain.on(DESKTOP_IPC.windowsAppearance, (event, language, color, symbolColor) => {
@@ -110,7 +115,7 @@ ipcMain.on(DESKTOP_IPC.windowsAppearance, (event, language, color, symbolColor) 
 });
 ```
 
-而喂给它的两个颜色，来自 `lib/preload-app.cjs` 里一个隐藏探针：
+而喂给它的两个颜色，来自 DSH 桌面端 `lib/preload-app.cjs` 里一个隐藏探针：
 
 ```js
 probe.style.cssText = "position:fixed;visibility:hidden;pointer-events:none;"
@@ -201,7 +206,7 @@ body > span[style*='visibility:hidden'][style*='--dsw-specific-sidebar-fill'] {
 - **收起后回得来** —— 折到 55 px 轨道时，那个"展开"按钮显示的是 **DeepSeek 鲸标**而不是展开箭头，
   看不出能点，于是很容易以为侧边栏没了、只能重启。现在轨道模式
   （`html[data-ef-rail="on"]`，由对话列左边距判定）会把该按钮点亮成警戒黄描边 + 辉光，
-  轨道本身也留一道黄色右边线；快捷键 **Ctrl+Alt+B** 任何时候都能切换。
+  轨道本身也留一道黄色右边线——回来这件事靠的是看得见，而不是记住一个快捷键。
 - **移除了侧边栏的 `backdrop-filter`** —— 那是一个全高、宽度每次折叠都在动的元素上挂磨砂，
   正是最容易留下一层卡住的合成层的形状：列宽还在但不再绘制，看上去就是"侧边栏消失了"。
   whale-fantasy 皮肤得出过同样结论并在 README 里量过。装饰层同时从 `<body>` 首个子元素改为
@@ -352,7 +357,7 @@ dsh-endfield-theme/
 - `?dsh-endfield-splash=0` —— 不播开屏
 - `?dsh-endfield-brand=0` —— 保留 DSH 原品牌位，主题其余部分照常
 - 控制台重播开屏：`__dshEndfieldTheme.replay()`
-- 侧边栏收起/展开：点轨道里那枚高亮的侧栏按钮，或 **Ctrl+Alt+B**
+- 侧边栏收起/展开：点轨道里那枚高亮的侧栏按钮
 - 系统「减少动态效果」开启时：不播开屏，背景动效全部关掉，主题照常生效
 - 推荐配置：设置 → 通用 → 外观 切到**深色**（浅色是雪原变体，深色才是终末地的语言）
 

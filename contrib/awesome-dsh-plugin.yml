@@ -8,13 +8,18 @@
 # Requirements this plugin already meets (see the catalog's contributing.md):
 #   - package.json declares `dsh.bundle.patch`  → yes, plus cordis.patch.yml
 #   - real, working code                        → yes, npm test covers the host half
-#   - repo at least 1 day old                   → CI checks this; open the PR tomorrow
-#   - `dsh-plugin` topic on the repo            → add it in the repo settings
+#   - repo at least 1 day old                   → CI checks this
+#   - `dsh-plugin` topic on the repo            → already set
 #   - description states what it does, no marketing, and is accurate
+#
+# The description below is read as a claim about the plugin and checked against
+# the code. Two things are worth re-verifying before submitting, because both
+# have been wrong here: how many injection rows the host actually emits, and
+# whether every shortcut the README mentions is really implemented.
 
 url: https://github.com/Longxiangjunlin/dsh-endfield-theme
 name: Longxiangjunlin/dsh-endfield-theme
 category: theme
 description:
-  en: 'Arknights: Endfield skin for the DeepSeek Harness Web GUI: charcoal and hazard-yellow industrial HUD, a first-paint boot splash, a conversation backdrop, and a re-cut Windows title bar.'
+  en: 'Arknights: Endfield theme for the DeepSeek Harness Web GUI: charcoal and hazard-yellow industrial HUD, a first-paint boot splash, a conversation backdrop, and a re-cut Windows title bar.'
   zh: '《明日方舟：终末地》主题：炭黑与警戒黄的工业 HUD、首帧开屏动画、对话区背景，以及重新配色的 Windows 标题栏。'
