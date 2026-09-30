@@ -6,25 +6,51 @@
 The **code** in this repository is MIT (see [`LICENSE`](LICENSE)). It also ships material that
 is not mine; this page is about that material.
 
-## 1. 《明日方舟：终末地》官方素材 / Arknights: Endfield assets
+## 1. 《明日方舟：终末地》素材 / Arknights: Endfield assets
+
+### 1.1 标志与图标 / Marks and icons
 
 | 文件 | 内容 |
 | --- | --- |
-| `client/assets/endfield-field.jpg` | 深色背景（由官方主视觉烘焙：压暗、去饱和、加暗角） |
-| `client/assets/endfield-field-day.jpg` | 浅色背景（同日主视觉的雪原变体） |
+| `client/assets/endfield-lockup-light-bg.png` | 完整 lockup（冠部 + `终末地 / ENDFIELD INDUSTRIES` + 倒三角），**浅色侧栏用**（黑白对调） |
+| `client/assets/endfield-lockup-dark-bg.png` | 同一 lockup，**深色侧栏用**（原样） |
 | `client/assets/endfield-mark-zh.png` | `终末地 / ENDFIELD INDUSTRIES` 字标（白） |
 | `client/assets/endfield-mark-zh-dark.png` | 同一字标的墨黑版 |
 | `client/assets/endfield-mark-en.png` | `ENDFIELD INDUSTRIES` 字标（白） |
 | `client/assets/endfield-emblem.png` | 徽记冠部线稿（开屏底纹） |
-| `client/assets/endfield-icon.svg` | 站点图标（矢量化重绘） |
-| 品牌行里的倒三角 | 依徽记造型**手绘的矢量**（`client/theme.js` 中的 `BRAND_MARK`） |
+| `client/assets/endfield-icon.svg` | 站点图标（由徽记冠部矢量化重绘） |
 
-这些是 **© Hypergryph / GRYPHLINE** 的商标与美术作品，随本仓库按**同人非商业**用途分发，
-**不是** MIT 的一部分，也不在本仓库的授权范围内。使用即表示你明白这一点。
+**来源 / Provenance**
 
-This is trademarked and copyrighted material belonging to **© Hypergryph / GRYPHLINE**. It is
-included here for **non-commercial fan use only**. It is **not** covered by this repository's MIT
-license. If you fork this, that obligation travels with the files.
+这一组标志素材由本仓库作者**从 B 站用户 `SealedManx41527` 处取得**；他那一份同样是从
+《明日方舟：终末地》的官方素材加工而来。所以链条是：
+
+```
+Hypergryph / GRYPHLINE        ← 官方原作，商标与著作权在这里
+        ↓  加工
+B 站用户 SealedManx41527      ← 本站素材的直接来源
+        ↓  提供
+本仓库                        ← 抠图 / 黑白对调 / 矢量化 / 缩尺寸
+```
+
+**版权归属不因为经手人变化而改变**：这些图形的商标与著作权是
+**© Hypergryph / GRYPHLINE** 的，随本仓库按**同人非商业**用途分发，**不是** MIT 的一部分，
+也不在本仓库的授权范围内。使用即表示你明白这一点。
+
+The marks above were obtained by this repository's author **from the Bilibili user
+`SealedManx41527`**, whose own copy is likewise derived from official *Arknights: Endfield*
+material. **The trademark and copyright remain © Hypergryph / GRYPHLINE**; they are included
+for **non-commercial fan use only** and are **not** covered by this repository's MIT license.
+If you fork this, that obligation travels with the files.
+
+### 1.2 对话区背景 / Conversation backdrop
+
+| 文件 | 内容 |
+| --- | --- |
+| `client/assets/endfield-field.jpg` | 深色背景（由主视觉烘焙：压暗、去饱和、加暗角） |
+| `client/assets/endfield-field-day.jpg` | 浅色背景（同一主视觉的雪原变体） |
+
+同样源自《明日方舟：终末地》官方美术，**© Hypergryph / GRYPHLINE**，同人非商业用途。
 
 想商用的，请自行替换上面这些文件——插件的代码路径不依赖它们的具体内容，只要文件名与尺寸
 保持即可（路由 `/dsh-endfield/assets/*` 按文件名提供）。

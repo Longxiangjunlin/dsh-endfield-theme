@@ -374,7 +374,8 @@ npm test        # = node test/host.test.mjs
 
 - 字体：**Noto Sans SC** 与 **Saira**，均为 SIL OFL 1.1，子集化后随插件分发，许可证全文在
   `client/assets/fonts/`。
-- 背景艺术与字标来自《明日方舟：终末地》官方素材（**© Hypergryph / GRYPHLINE**），
+- 标志与图标素材由作者从 **B 站用户 `SealedManx41527`** 处取得，他自己那一份也来自
+  《明日方舟：终末地》官方素材。**版权与商标始终属于 © Hypergryph / GRYPHLINE**，
   按**同人非商业**用途分发，**不在 MIT 范围内**；商用请自行替换
-  `client/assets/endfield-field*.jpg` 与 `endfield-mark-*.png`。
+  `client/assets/endfield-lockup-*.png`、`endfield-mark-*.png` 与 `endfield-field*.jpg`。
 - 本插件是 DSH 的第三方插件，不是 DeepSeek 官方项目。
