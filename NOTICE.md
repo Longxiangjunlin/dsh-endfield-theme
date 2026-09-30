@@ -1,10 +1,10 @@
 # 第三方素材与授权 / Third-party assets and licensing
 
-本仓库的**代码**是 MIT（见 [`LICENSE`](LICENSE)）。但仓库里还带着几份**不属于我**的东西，
-分发与再使用看这一页。
+本仓库的**代码**是 MIT（见 [`LICENSE`](LICENSE)）。但仓库里还带着几份**不属于本仓库作者**的
+东西，分发与再使用看这一页。
 
 The **code** in this repository is MIT (see [`LICENSE`](LICENSE)). It also ships material that
-is not mine; this page is about that material.
+the author does not own; this page is about that material.
 
 ## 1. 《明日方舟：终末地》素材 / Arknights: Endfield assets
 
@@ -29,8 +29,7 @@ bilibili.com/opus/1237489243187576841
 
 **版权归属不因为经手人变化而改变**：这些图形的商标与著作权是
 **© Hypergryph / GRYPHLINE** 的，随本仓库按**同人非商业**用途分发，**不是** MIT 的一部分，
-也不在本仓库的授权范围内。使用即表示你明白这一点。若权利人认为本仓库的分发方式不妥，
-联系作者即可移除。
+也不在本仓库的授权范围内。若权利人认为本仓库的分发方式不妥，联系作者即可移除。
 
 The Endfield artwork in this repository was obtained by its author from a post by the Bilibili
 user **[SealedManx41527](https://space.bilibili.com/2056642352)**
@@ -47,7 +46,6 @@ files.
 | `client/assets/endfield-lockup-light-bg.png` | 完整 lockup（冠部 + `终末地 / ENDFIELD INDUSTRIES` + 倒三角），**浅色侧栏用**（黑白对调） |
 | `client/assets/endfield-lockup-dark-bg.png` | 同一 lockup，**深色侧栏用**（原样） |
 | `client/assets/endfield-mark-zh.png` | `终末地 / ENDFIELD INDUSTRIES` 字标（白） |
-| `client/assets/endfield-mark-zh-dark.png` | 同一字标的墨黑版 |
 | `client/assets/endfield-mark-en.png` | `ENDFIELD INDUSTRIES` 字标（白） |
 | `client/assets/endfield-emblem.png` | 徽记冠部线稿（开屏底纹） |
 | `client/assets/endfield-icon.svg` | 站点图标（由徽记冠部矢量化重绘） |
@@ -70,8 +68,16 @@ files.
 | `client/assets/fonts/endfield-tech.woff2` | Saira（可变字宽/字重子集，拉丁与数字） | SIL OFL 1.1 |
 
 两份许可证全文随包分发：`client/assets/fonts/OFL-NotoSansSC.txt`、
-`client/assets/fonts/OFL-Saira.txt`。SIL OFL 允许再分发与嵌入，要求保留许可证，
-且**不得单独售卖字体本身**——本仓库两个条件都满足。
+`client/assets/fonts/OFL-Saira.txt`。
+
+OFL 有三个条件，本仓库都满足：
+
+1. **保留许可证** —— 两份全文随包分发；
+2. **不得单独售卖字体本身** —— 本插件不售卖字体；
+3. **修改版不得使用保留字体名（Reserved Font Name）** —— 上游声明里，Noto Sans SC 带
+   `with Reserved Font Name 'Source'`（它是 Source Han Sans 一脉），Saira 则没有声明保留名。
+   本仓库子集化后把两个字族都改名为 `Endfield Sans SC` / `Endfield Tech`，没有沿用上游名称：
+   对前者这是**必须**做的，对后者是顺带。这一点值得写明，因为从文件名看不出合规与侥幸的区别。
 
 ## 3. DeepSeek Harness
 

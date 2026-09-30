@@ -2,6 +2,21 @@ MIT License
 
 Copyright (c) 2026 Longxiangjunlin
 
+-------------------------------------------------------------------------------
+EXCLUSION — this license does not cover the bundled artwork.
+
+"The Software" below means the source code and the stylesheets in this
+repository. It does NOT include the Arknights: Endfield artwork under
+`client/assets/` (the background images, the wordmarks, the emblem, the site
+icon and the lockup files). That artwork is the property of
+© Hypergryph / GRYPHLINE, is included for non-commercial fan use only, and is
+covered by the terms in NOTICE.md instead. The MIT grant below is not made over
+it, and cannot be — the author does not hold those rights.
+
+The bundled fonts under `client/assets/fonts/` are likewise excluded; they are
+SIL OFL 1.1 and carry their own licenses alongside them.
+-------------------------------------------------------------------------------
+
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
 in the Software without restriction, including without limitation the rights

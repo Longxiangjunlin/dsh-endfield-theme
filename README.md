@@ -4,11 +4,20 @@
 带**开屏动画**与**对话区背景**。它是一个普通的 DSH 客户端插件（host 半区发一条路由 +
 四条 index 注入行，浏览器半区是纯 CSS/JS），不依赖皮肤中心，也不需要构建步骤。
 
+桌面端与浏览器端共用同一份前端，主题两边都生效；其中**开屏首帧**与**标题栏重切**依赖桌面端
+独有的机理（注入行下发时机、Windows Controls Overlay），在浏览器形态下表现为普通的开屏与
+普通的分栏。
+
 English: an Arknights: Endfield themed client plugin for the DeepSeek Harness Web
 GUI — charcoal industrial HUD, a single hazard-yellow accent, a boot splash and a
 conversation backdrop. The host half serves one asset route and four
 index-injection rows; the browser half is plain CSS/JS. No build step, no skin
 center required.
+
+The desktop app and the browser front end render the same UI, so the theme applies
+to both. Two details are desktop-only, because they depend on machinery the
+browser transport does not have (the timing of injection rows, and the Windows
+Controls Overlay): the splash being the first paint, and the re-cut title bar.
 
 ![开屏动画](preview/splash.jpg)
 
@@ -18,7 +27,8 @@ center required.
 
 ## 它做了什么
 
-- **开屏动画** —— 每次文档加载跑一次，约 2.9 s，用的是**官方字标素材**（不是排出来的字）：
+- **开屏动画** —— 每次文档加载跑一次，约 2.9 s，用的是终末地字标素材（不是排出来的字，
+  出处见 [`NOTICE.md`](NOTICE.md)）：
   黑色底 + 46 px 测量网格 + 上下警戒带拉开 → 一枚巨大的终末地三角徽记以 5.5% 白浮出来做底
   → 一道警戒黄扫描光带从上扫到下 → **`终末地` 中文字标被一道带亮边的横向擦除从左往右写出来**
   → 细线、`BOOT 100%` 进度条、左下角三行终端自检、右下角英文 `ENDFIELD INDUSTRIES` 小字标
@@ -29,8 +39,7 @@ center required.
   （0.4 / 0.9 / 1.5 / 2.1 s 四帧。字标用的是 `endfield-mark-zh.png`（白，中英合一）
   与 `endfield-mark-en.png`（白，纯英文）；大徽记只取上半段的山川纹理冠部做底纹——
   整张徽记中间还压着同一句 `终末地 / ENDFIELD INDUSTRIES`，拿它做底纹会在字标被擦写出来的
-  同一时刻、同一位置印出一个鬼影。素材里对应的黑色版本也处理成
-  `endfield-mark-zh-dark.png`，浅底场景用得上。）
+  同一时刻、同一位置印出一个鬼影。）
 
   它现在是**首帧**而不是脚本搭出来的：原版客户端没有独立开屏环节，启动时看到的其实是官方
   boot 底色（浅色 `#fff` / 深色 `#151517`）加外壳第一帧，所以开屏改由 **index 注入行**下发。
@@ -44,7 +53,7 @@ center required.
   压在侧边栏品牌行上，看起来像第二个画歪了的"收起侧栏"按钮叠在 logo 上。现在由
   `theme.js` 量 `[class*="centerCol"]` 的矩形写进 `.ef-frame`，`ResizeObserver` + 窗口 resize +
   MutationObserver 三路跟随，侧栏收起/展开都会重新贴合。
-- **整体色调** —— 全部 `--dsw-*` 设计 token 重映射成终末地那套语言：炭黑面板、1 px 发丝结构线、
+- **整体色调** —— `--dsw-*` 设计 token 重映射成终末地那套语言：炭黑面板、1 px 发丝结构线、
   近直角（半径 2–10 px）、等宽读数、警戒黄**只给状态**（新会话按钮、当前行左轨、链接、
   选中文本、焦点环、进度）。深色是设计本体，浅色是「雪原」变体。
 
@@ -209,8 +218,7 @@ body > span[style*='visibility:hidden'][style*='--dsw-specific-sidebar-fill'] {
   轨道本身也留一道黄色右边线——回来这件事靠的是看得见，而不是记住一个快捷键。
 - **移除了侧边栏的 `backdrop-filter`** —— 那是一个全高、宽度每次折叠都在动的元素上挂磨砂，
   正是最容易留下一层卡住的合成层的形状：列宽还在但不再绘制，看上去就是"侧边栏消失了"。
-  whale-fantasy 皮肤得出过同样结论并在 README 里量过。装饰层同时从 `<body>` 首个子元素改为
-  追加到末尾，避开任何 `body > :first-child` 假设。
+  装饰层同时从 `<body>` 首个子元素改为追加到末尾，避开任何 `body > :first-child` 假设。
 
 ## 品牌位
 
@@ -238,7 +246,7 @@ body > span[style*='visibility:hidden'][style*='--dsw-specific-sidebar-fill'] {
 
 做法：
 
-- 图标就是**官方 lockup 原图**（冠部 + `终末地 / ENDFIELD INDUSTRIES` + 倒三角），
+- 图标就是终末地 lockup 素材本身（冠部 + `终末地 / ENDFIELD INDUSTRIES` + 倒三角），
   没有重画、没有描摹，只是缩到 28px。这个尺寸下里面的字标读不出来，也不指望读出来——
   它承担的是"剪影"，名字由旁边的「终末地工业」写清楚。
 - **两份素材缺一不可，且极易用反**。原图是双色的：不透明像素里 49% 纯黑、46% 纯白，
@@ -261,7 +269,6 @@ body > span[style*='visibility:hidden'][style*='--dsw-specific-sidebar-fill'] {
   不会和 React 打乒乓。
 - 按钮自己的 `aria-label`（新建会话）没动，整个标识区本来就是 `aria-hidden`，
   所以这个改动不影响这个按钮"是什么、干什么"。
-- 想关掉这一处、保留其余部分：在 DSH Web 地址后加 `?dsh-endfield-brand=0`。
 
 ## 字体
 
@@ -270,8 +277,8 @@ body > span[style*='visibility:hidden'][style*='--dsw-specific-sidebar-fill'] {
 
 | 字体 | 来源 | 子集 | 用途 |
 | --- | --- | --- | --- |
-| **Endfield Sans SC** | Noto Sans SC（可变，wght 100–900） | 拉丁 + GB2312（7626 字）+ CJK 标点，1.95 MB | 全局 UI：正文、按钮、会话名、对话框 |
-| **Endfield Tech** | Saira（可变，wdth + wght） | 拉丁/数字/标点，105 KB | HUD 读数、大写标签、标题、模型名一类"仪器字" |
+| **Endfield Sans SC** | Noto Sans SC（可变，wght 100–900） | 拉丁 + GB2312 + CJK 标点，7 465 个码位，2.0 MB | 全局 UI：正文、按钮、会话名、对话框 |
+| **Endfield Tech** | Saira（可变，wdth + wght） | 拉丁/数字/标点，223 个码位，105 KiB | HUD 读数、大写标签、标题、模型名一类"仪器字" |
 
 为什么是这两套：终末地工业的味道来自**方正的重黑**加**窄体技术字**——中文用 800/900 的思源黑
 配紧字距，英文数字走 Saira 的窄体轴。原来的 `--dsw-font-family` 会把中文交给系统里碰巧装了的
@@ -334,15 +341,18 @@ dsh-endfield-theme/
 │     ├─ endfield-lockup-dark-bg.png   完整 lockup，深色侧栏用（原图）
 │     ├─ endfield-lockup-light-bg.png  同一 lockup，浅色侧栏用（黑白对调）
 │     ├─ endfield-mark-zh.png          终末地 + ENDFIELD INDUSTRIES 字标（白）
-│     ├─ endfield-mark-zh-dark.png     同一枚字标的墨黑版（浅底用）
 │     ├─ endfield-mark-en.png          纯英文 ENDFIELD INDUSTRIES 字标（白）
 │     ├─ endfield-emblem.png           徽记冠部白线稿，开屏底纹
 │     ├─ endfield-icon.svg             站点图标
 │     └─ fonts/
-│        ├─ endfield-sans-sc.woff2     Noto Sans SC 子集（1.95 MB）
-│        ├─ endfield-tech.woff2        Saira 子集（105 KB）
+│        ├─ endfield-sans-sc.woff2     Noto Sans SC 子集（2.0 MB）
+│        ├─ endfield-tech.woff2        Saira 子集（105 KiB）
 │        └─ OFL-*.txt                  两份 SIL OFL 1.1 许可证
-├─ contrib/awesome-dsh-plugin.yml   提交到插件目录用的条目
+├─ contrib/
+│  ├─ awesome-dsh-plugin.yml        提交到插件目录用的条目（整个文件原样复制过去）
+│  └─ README.md                     投稿步骤与提交前清单，不随提交分发
+├─ LICENSE                      MIT，含对 client/assets/ 素材的排除声明
+├─ NOTICE.md                    第三方素材出处与授权
 └─ preview/                     dark / light / splash / splash-strip / brand /
                                 titlebar-band / firstpaint-*
 ```

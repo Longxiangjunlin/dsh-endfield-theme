@@ -1,25 +1,14 @@
 # Submission entry for https://github.com/awesome-dsh-plugin/awesome-dsh-plugin
 #
-# Copy this file into a fork of that repo as:
-#     data/plugins/Longxiangjunlin__dsh-endfield-theme.yml
-# then open a PR. That one file is the whole submission — the READMEs in that
-# repo are generated from data/plugins/*.yml and must not be edited by hand.
-#
-# Requirements this plugin already meets (see the catalog's contributing.md):
-#   - package.json declares `dsh.bundle.patch`  → yes, plus cordis.patch.yml
-#   - real, working code                        → yes, npm test covers the host half
-#   - repo at least 1 day old                   → CI checks this
-#   - `dsh-plugin` topic on the repo            → already set
-#   - description states what it does, no marketing, and is accurate
-#
-# The description below is read as a claim about the plugin and checked against
-# the code. Two things are worth re-verifying before submitting, because both
-# have been wrong here: how many injection rows the host actually emits, and
-# whether every shortcut the README mentions is really implemented.
+# It is data, not documentation: the whole file is copied into a fork of that
+# repo as `data/plugins/Longxiangjunlin__dsh-endfield-theme.yml` and the comment
+# lines travel with it. Keep it to the five fields the catalog parses. The
+# how-to lives in contrib/README.md instead, so nothing addressed to this
+# repository's own author ends up inside the submission.
 
 url: https://github.com/Longxiangjunlin/dsh-endfield-theme
 name: Longxiangjunlin/dsh-endfield-theme
 category: theme
 description:
-  en: 'Arknights: Endfield theme for the DeepSeek Harness Web GUI: charcoal and hazard-yellow industrial HUD, a first-paint boot splash, a conversation backdrop, and a re-cut Windows title bar.'
-  zh: '《明日方舟：终末地》主题：炭黑与警戒黄的工业 HUD、首帧开屏动画、对话区背景，以及重新配色的 Windows 标题栏。'
+  en: 'Arknights: Endfield theme for the DeepSeek Harness Web GUI: charcoal and hazard-yellow industrial HUD, a first-paint boot splash, a conversation backdrop, and a re-cut Windows title bar. Restyles the sidebar brand to 终末地工业 / ENDFIELD INDUSTRIES, which a URL flag reverts.'
+  zh: '《明日方舟：终末地》主题：炭黑与警戒黄的工业 HUD、首帧开屏动画、对话区背景，以及重新配色的 Windows 标题栏。侧栏品牌会改为「终末地工业 / ENDFIELD INDUSTRIES」，可用 URL 参数还原。'

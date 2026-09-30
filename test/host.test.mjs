@@ -117,7 +117,7 @@ const call = (path, { method = 'GET', headers = {} } = {}) => {
   route.handler({
     method,
     url: path,
-    headers: { host: '127.0.0.1:19387', 'sec-fetch-site': 'same-origin', ...headers },
+    headers: { host: 'dsh.test', 'sec-fetch-site': 'same-origin', ...headers },
   }, response)
   return { status, body, headers: responseHeaders }
 }
