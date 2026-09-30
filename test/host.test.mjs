@@ -1,11 +1,19 @@
 // Exercise the plugin's host half without a running harness: mount it on a
-// fake cordis root, then drive the route handler and the injection row.
+// fake cordis root, then drive the route handler and the injection rows.
 //
 // usage: node test/host.test.mjs   (or: npm test)
+//
+// Point DSH_ENDFIELD_PKG at an installed or unpacked copy to run the same
+// assertions against what actually ships — `npm pack` honours `files`, so a
+// directory that this suite passes on can still hand the world a package that
+// is missing a file. Running it against the tarball is what catches that.
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
+import { join } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
-const { default: plugin } = await import('../lib/index.js')
+const packageDir = process.env.DSH_ENDFIELD_PKG ?? fileURLToPath(new URL('..', import.meta.url))
+const { default: plugin } = await import(pathToFileURL(join(packageDir, 'lib/index.js')).href)
 
 const rows = []
 const routes = []
