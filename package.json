@@ -1,0 +1,45 @@
+{
+  "name": "dsh-endfield-theme",
+  "version": "1.0.0",
+  "description": "《明日方舟：终末地》主题 for the DeepSeek Harness Web GUI — 炭黑 + 警戒黄工业 HUD、开屏动画、对话区背景。 / Arknights: Endfield theme for the DSH Web GUI: charcoal + hazard-yellow industrial HUD, boot splash, conversation backdrop.",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "theme",
+    "skin",
+    "arknights",
+    "endfield"
+  ],
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "client",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node test/host.test.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/760403-create/dsh-endfield-theme.git"
+  },
+  "homepage": "https://github.com/760403-create/dsh-endfield-theme#readme",
+  "bugs": {
+    "url": "https://github.com/760403-create/dsh-endfield-theme/issues"
+  },
+  "author": "760403-create",
+  "license": "MIT",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

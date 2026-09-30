@@ -1,0 +1,1015 @@
+/* ==========================================================================
+   dsh-endfield-theme — 终末地 / ENDFIELD
+   --------------------------------------------------------------------------
+   Charcoal industrial HUD with a single hazard-yellow accent, cut corners,
+   hairline structure and monospace readouts — the visual language of the
+   Endfield terminal UI, applied to the DeepSeek Harness Web GUI.
+
+   L1: the whole `--dsw-*` alias set is remapped (dark is the designed hero,
+       light is the daylight/雪原 variant).
+   L2: shell surfaces are re-cut: transparent canvas, the backdrop art as the
+       ground, translucent charcoal panels, hairline borders, yellow reserved
+       for state only.
+
+   Every colour below that carries a name was measured off the shipped key art
+   (tools/bake_assets.py): the accent is the poster's hazard yellow #F9F60C,
+   the neutral family is its olive-charcoal shadow #242820 / #383E36.
+   ========================================================================== */
+
+/* ==========================================================================
+   Fonts
+   --------------------------------------------------------------------------
+   Two variable faces, subset and shipped with the plugin (SIL OFL 1.1; the
+   licences sit next to the files in assets/fonts/):
+
+     Endfield Sans SC — Noto Sans SC, Latin + GB2312 + CJK punctuation, so the
+       client speaks one gothic throughout instead of handing Chinese to
+       whatever Microsoft YaHei happens to be installed. 100–900 gives the
+       heavy headings the industrial register needs.
+     Endfield Tech — Saira, Latin/digits/punctuation only, with a width axis.
+       The face for HUD labels, readouts and numerals: condensed, squared,
+       nothing like a UI sans.
+   ========================================================================== */
+
+@font-face {
+  font-family: 'Endfield Sans SC';
+  src: url(assets/fonts/endfield-sans-sc.woff2) format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Endfield Tech';
+  src: url(assets/fonts/endfield-tech.woff2) format('woff2');
+  font-weight: 100 900;
+  font-stretch: 50% 125%;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --ef-y: #f2f013;              /* hazard yellow — measured #f9f60c, toned to sit on charcoal */
+  --ef-y-hi: #fbfa6a;
+  --ef-y-lo: #a8a60c;
+  --ef-y-12: rgba(242, 240, 19, 0.12);
+  --ef-y-20: rgba(242, 240, 19, 0.2);
+  --ef-y-45: rgba(242, 240, 19, 0.45);
+
+  --ef-ink-1000: #050606;
+  --ef-ink-900: #0a0c0c;
+  --ef-ink-800: #111413;
+  --ef-ink-700: #191d1c;
+  --ef-ink-600: #232827;
+  --ef-ink-500: #2e3331;
+
+  --ef-mono: "Cascadia Mono", "Cascadia Code", Consolas, "SF Mono", ui-monospace, monospace;
+  --ef-sans: "Endfield Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  /* The technical face has no Chinese at all, so it MUST fall through to the
+     shipped gothic rather than to whatever `sans-serif` resolves to — otherwise
+     every Chinese label set in the display face lands on Microsoft YaHei. */
+  --ef-din: "Endfield Tech", "Bahnschrift", "DIN Alternate", "Arial Narrow", var(--ef-sans);
+
+  --ef-ease: cubic-bezier(0.22, 0.9, 0.16, 1);
+}
+
+/* ==========================================================================
+   1. Canvas and backdrop
+   ========================================================================== */
+
+html {
+  background-color: var(--ef-ink-1000);
+}
+
+/* The shell paints its own opaque ground on body / the frame / the conversation
+   column. All three go transparent so the decoration layer below is the ground. */
+body,
+[data-slot='root'] > div,
+[class*='centerCol'],
+[data-phase],
+[data-slot='main'],
+[data-slot='main.conversation'] {
+  background-color: transparent !important;
+}
+
+#ef-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  overflow: hidden;
+  background-color: var(--ef-ink-1000);
+}
+
+#ef-backdrop .ef-art {
+  position: absolute;
+  inset: 0;
+  background-image: var(--ef-art);
+  background-size: cover;
+  background-position: center 38%;
+  background-repeat: no-repeat;
+  transform: scale(1.02);
+  animation: ef-art-in 1.6s var(--ef-ease) both;
+  transition: filter 0.45s var(--ef-ease);
+}
+
+/* Readability scrim: the art is the ground for text, so it carries its own
+   contrast floor instead of relying on the panels alone. */
+#ef-backdrop .ef-scrim {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(120% 90% at 50% 42%, rgba(5, 6, 6, 0) 0%, rgba(5, 6, 6, 0.42) 62%, rgba(5, 6, 6, 0.8) 100%),
+    linear-gradient(180deg, rgba(5, 6, 6, 0.62) 0%, rgba(5, 6, 6, 0.28) 26%, rgba(5, 6, 6, 0.34) 72%, rgba(5, 6, 6, 0.72) 100%);
+}
+
+/* The measuring grid: 44px structural lines plus 220px major ticks. */
+#ef-backdrop .ef-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(214, 220, 214, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(214, 220, 214, 0.055) 1px, transparent 1px),
+    linear-gradient(rgba(242, 240, 19, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(242, 240, 19, 0.05) 1px, transparent 1px);
+  background-size: 44px 44px, 44px 44px, 220px 220px, 220px 220px;
+  background-position: center top;
+  mask-image: radial-gradient(130% 100% at 50% 40%, #000 20%, transparent 88%);
+}
+
+/* Hazard tape rails pinned to the window edges. */
+#ef-backdrop .ef-tape {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 5px;
+  opacity: 0.4;
+  background-image: repeating-linear-gradient(
+    115deg,
+    var(--ef-y) 0 10px,
+    transparent 10px 22px
+  );
+  mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+}
+
+#ef-backdrop .ef-tape--top { top: 0; }
+#ef-backdrop .ef-tape--bottom { bottom: 0; }
+
+/* The desktop caption strip is 40px of OS-drawn chrome sitting on top of the
+   top-right corner, so a rail pinned to y=0 loses its last ~140px. Drop it
+   below the strip instead. */
+html[data-windows-titlebar] #ef-backdrop .ef-tape--top {
+  top: var(--dsh-windows-titlebar-height, 40px);
+}
+
+/* Corner brackets: the frame of a targeting display, not a border.
+   They are anchored on the CONVERSATION COLUMN (theme.js measures it and writes
+   left/top/width/height every time the layout moves), not on the window: a
+   window-anchored bracket at 16,16 lands straight on the sidebar's brand row,
+   where it reads as a second, mis-drawn collapse button sitting on the logo. */
+#ef-backdrop .ef-frame {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  transition: opacity 0.4s var(--ef-ease);
+}
+
+#ef-backdrop .ef-frame.is-placed { opacity: 1; }
+
+#ef-backdrop .ef-bracket {
+  position: absolute;
+  width: 46px;
+  height: 46px;
+  border: 1px solid var(--ef-y-45);
+  opacity: 0.5;
+}
+
+#ef-backdrop .ef-bracket--tl { top: 14px; left: 14px; border-right: 0; border-bottom: 0; }
+#ef-backdrop .ef-bracket--tr { top: 14px; right: 14px; border-left: 0; border-bottom: 0; }
+#ef-backdrop .ef-bracket--bl { bottom: 14px; left: 14px; border-right: 0; border-top: 0; }
+#ef-backdrop .ef-bracket--br { bottom: 14px; right: 14px; border-left: 0; border-top: 0; }
+
+#ef-backdrop .ef-ruler {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  width: 9px;
+  height: 200px;
+  transform: translateY(-50%);
+  opacity: 0.34;
+  background-image: repeating-linear-gradient(
+    180deg,
+    rgba(242, 240, 19, 0.75) 0 1px,
+    transparent 1px 11px
+  );
+}
+
+@media (max-width: 900px) {
+  #ef-backdrop .ef-ruler { display: none; }
+}
+
+/* ==========================================================================
+   2. Dark theme — the designed mode
+   ========================================================================== */
+
+body[data-ds-dark-theme] {
+  color: #edf0ea;
+
+  --dsw-alias-bg-base: transparent;
+  --dsw-alias-bg-document-preview: #0b0e0d;
+  --dsw-alias-bg-layer-1: rgba(10, 12, 12, 0.74);
+  --dsw-alias-bg-layer-2: rgba(17, 20, 19, 0.88);
+  --dsw-alias-bg-layer-3: rgba(25, 29, 28, 0.94);
+  --dsw-alias-bg-mask-1: rgba(3, 4, 4, 0.56);
+  --dsw-alias-bg-mask-2: rgba(3, 4, 4, 0.3);
+  --dsw-alias-bg-mask-3: rgba(3, 4, 4, 0.68);
+  --dsw-alias-bg-mask-drop: rgba(10, 12, 12, 0.72);
+  --dsw-alias-bg-mask-photo: rgba(3, 4, 4, 0.9);
+  --dsw-alias-bg-module-platform: rgba(20, 24, 23, 0.9);
+  --dsw-alias-bg-multi-select: rgba(20, 24, 23, 0.9);
+  --dsw-alias-bg-overlay: rgba(8, 10, 10, 0.96);
+  --dsw-alias-bg-skeleton: rgba(242, 240, 19, 0.07);
+
+  --dsw-alias-border-inverted: rgba(237, 240, 234, 0.06);
+  --dsw-alias-border-inverted2: rgba(237, 240, 234, 0.1);
+  --dsw-alias-border-l1: rgba(214, 220, 214, 0.1);
+  --dsw-alias-border-l2: rgba(214, 220, 214, 0.18);
+  --dsw-alias-border-l2-darkmode-thin: rgba(214, 220, 214, 0.12);
+  --dsw-alias-border-l3: var(--ef-y-45);
+  --dsw-alias-border-l4: rgba(214, 220, 214, 0.26);
+
+  --dsw-alias-brand-primary: var(--ef-y);
+  --dsw-alias-brand-primary-invert: #edf0ea;
+  --dsw-alias-brand-text: #070a08;
+  --dsw-alias-button-primary-fill: var(--ef-y);
+  --dsw-alias-button-primary-hover: var(--ef-y-hi);
+  --dsw-alias-button-primary-dimmed: rgba(242, 240, 19, 0.34);
+  --dsw-alias-button-contrast-fill: #edf0ea;
+  --dsw-alias-button-elevated-fill: rgba(25, 29, 28, 0.92);
+  --dsw-alias-button-floating-fill: rgba(17, 20, 19, 0.94);
+  --dsw-alias-button-floating-hover: rgba(35, 40, 39, 0.96);
+  --dsw-alias-button-info-fill: var(--ef-y);
+  --dsw-alias-button-info-hover: var(--ef-y-hi);
+  --dsw-alias-button-ghost-active-fill: rgba(242, 240, 19, 0.14);
+  --dsw-alias-button-ghost-active-hover: rgba(242, 240, 19, 0.2);
+  --dsw-alias-button-ghost-active-border: var(--ef-y-45);
+
+  --dsw-alias-interactive-bg-hover: rgba(242, 240, 19, 0.07);
+  --dsw-alias-interactive-bg-hover-accent: rgba(242, 240, 19, 0.13);
+  --dsw-alias-interactive-bg-hover-danger: rgba(229, 72, 77, 0.16);
+  --dsw-alias-interactive-bg-hover-solid: rgba(35, 40, 39, 0.95);
+  --dsw-alias-interactive-bg-active: rgba(242, 240, 19, 0.17);
+
+  --dsw-alias-label-primary: #edf0ea;
+  --dsw-alias-label-primary-bluish: #f2f5ee;
+  --dsw-alias-label-primary-dimmed: #d3d8d1;
+  --dsw-alias-label-primary-foreground: #070a08;
+  --dsw-alias-label-primary-inverted: #101413;
+  --dsw-alias-label-secondary: #a6aea8;
+  --dsw-alias-label-tertiary: #79827c;
+  --dsw-alias-label-caption: #5d6661;
+  --dsw-alias-label-dimmed: #3c4441;
+  --dsw-alias-label-deep-diving: #d8d67a;
+  --dsw-alias-label-deep-diving-shimmer: #8f8d20;
+  --dsw-alias-label-shimmer: rgba(242, 240, 19, 0.35);
+  --dsw-alias-label-document-preview: #c9d0cd;
+  --dsw-alias-link: var(--ef-y);
+  --dsw-alias-menu-icon: #c9d0cd;
+
+  --dsw-alias-markdown-citation: rgba(25, 29, 28, 0.9);
+  --dsw-alias-markdown-code-block: rgba(5, 6, 6, 0.72);
+  --dsw-alias-markdown-code-block-banner: rgba(25, 29, 28, 0.9);
+  --dsw-alias-markdown-code-segment-selected: rgba(242, 240, 19, 0.16);
+  --dsw-alias-markdown-code-segment-unselected: rgba(25, 29, 28, 0.6);
+  --dsw-alias-markdown-inline-code: rgba(242, 240, 19, 0.08);
+  --dsw-alias-markdown-placeholder: rgba(35, 40, 39, 0.9);
+  --dsw-alias-markdown-tag: rgba(242, 240, 19, 0.1);
+
+  --dsw-alias-scrollbar-bg-l1: rgba(242, 240, 19, 0.22);
+  --dsw-alias-scrollbar-bg-l2: rgba(214, 220, 214, 0.18);
+  --dsw-alias-scrollbar-hover-l1: rgba(242, 240, 19, 0.5);
+  --dsw-alias-scrollbar-hover-l2: rgba(214, 220, 214, 0.34);
+
+  --dsw-alias-state-business-primary: var(--ef-y);
+  --dsw-alias-state-business-tertiary: rgba(242, 240, 19, 0.14);
+  --dsw-alias-state-error-primary: #f2645e;
+  --dsw-alias-state-error-secondary: #f2645e;
+  --dsw-alias-state-idle-primary: #4a524f;
+  --dsw-alias-state-success-primary: #b9d23a;
+  --dsw-alias-state-success-secondary: #d2e36a;
+  --dsw-alias-state-success-tertiary: #2b3216;
+  --dsw-alias-state-warn-label: #e8b93a;
+  --dsw-alias-state-warn-primary: var(--ef-y);
+  --dsw-alias-state-warn-secondary: #e8e56a;
+  --dsw-alias-state-warn-tertiary: #33330f;
+
+  --dsw-alias-switch-thumb: #edf0ea;
+  --dsw-alias-toast-bg: rgba(17, 20, 19, 0.97);
+  --dsw-alias-toast-label: #edf0ea;
+  --dsw-alias-tooltip-bg: rgba(8, 10, 10, 0.97);
+  --dsw-alias-tooltip-key-bg: rgba(242, 240, 19, 0.14);
+  --dsw-alias-turn-trigger-bg: rgba(242, 240, 19, 0.08);
+  --dsw-alias-turn-trigger-bg-hover: rgba(242, 240, 19, 0.16);
+
+  --dsw-alias-code-diff-added: rgba(185, 210, 58, 0.12);
+  --dsw-alias-code-diff-deleted: rgba(242, 100, 94, 0.12);
+  --dsw-alias-file-diff-added-bg: rgba(46, 58, 22, 0.6);
+  --dsw-alias-file-diff-added-gutter: rgba(30, 38, 14, 0.7);
+  --dsw-alias-file-diff-added-marker: #b9d23a;
+  --dsw-alias-file-diff-deleted-bg: rgba(58, 30, 28, 0.6);
+  --dsw-alias-file-diff-deleted-gutter: rgba(38, 18, 16, 0.7);
+  --dsw-alias-file-diff-deleted-marker: #f2645e;
+
+  --dsw-specific-bubble: rgba(28, 33, 31, 0.88);
+  --dsw-specific-bubble-highlight: rgba(242, 240, 19, 0.16);
+  --dsw-specific-input-major: rgba(13, 16, 15, 0.86);
+  --dsw-specific-login-input: rgba(17, 20, 19, 0.9);
+  --dsw-specific-menu: rgba(11, 13, 13, 0.9);
+  --dsw-menu-surface-fill: rgba(11, 13, 13, 0.9);
+  --dsw-alias-menu-group-header-fill: rgba(11, 13, 13, 0.96);
+  --dsw-specific-selector: rgba(242, 240, 19, 0.16);
+  --dsw-specific-sidebar-fill: rgba(7, 9, 9, 0.82);
+  --dsw-specific-sidebar-nav-item-active: rgba(242, 240, 19, 0.14);
+  --dsw-specific-sidebar-nav-item-active-accent: rgba(242, 240, 19, 0.2);
+  --dsw-specific-sidebar-nav-item-hover: rgba(242, 240, 19, 0.07);
+  --dsw-specific-tip: rgba(25, 29, 28, 0.9);
+
+  --dsw-alias-onboarding-accent: var(--ef-y);
+  --dsw-alias-onboarding-card-fill: rgba(10, 12, 12, 0.92);
+  --dsw-alias-onboarding-secondary-fill: rgba(25, 29, 28, 0.94);
+  --dsw-alias-onboarding-checkbox-border: rgba(242, 240, 19, 0.4);
+
+  --dsw-elevation-stroke-color: rgba(214, 220, 214, 0.16);
+  --dsw-shadow-lv2: 0 8px 28px rgba(0, 0, 0, 0.5);
+  --dsw-shadow-lv3: 0 0 0 1px rgba(214, 220, 214, 0.14), 0 18px 46px rgba(0, 0, 0, 0.55);
+  --dsw-menu-backdrop-filter: blur(14px) saturate(120%);
+
+  --dsw-linear-gradient-think: linear-gradient(180deg, #0a0c0c 20%, rgba(10, 12, 12, 0) 100%);
+  --dsw-linear-think-select: linear-gradient(180deg, rgba(25, 29, 28, 0.95) 20%, rgba(25, 29, 28, 0) 100%);
+
+  --dsh-scrollbar-thumb: rgba(242, 240, 19, 0.24);
+  --dsh-scrollbar-thumb-hover: rgba(242, 240, 19, 0.52);
+
+  --ef-art: url(assets/endfield-field.jpg);
+
+  background-color: transparent;
+}
+
+/* ==========================================================================
+   3. Light theme — 雪原 daylight variant
+   ========================================================================== */
+
+body:not([data-ds-dark-theme]) {
+  color: #14170f;
+
+  --dsw-alias-bg-base: transparent;
+  --dsw-alias-bg-document-preview: #f7f8f4;
+  --dsw-alias-bg-layer-1: rgba(250, 251, 247, 0.84);
+  --dsw-alias-bg-layer-2: rgba(245, 247, 241, 0.9);
+  --dsw-alias-bg-layer-3: rgba(255, 255, 253, 0.95);
+  --dsw-alias-bg-mask-1: rgba(20, 24, 20, 0.24);
+  --dsw-alias-bg-mask-2: rgba(20, 24, 20, 0.1);
+  --dsw-alias-bg-mask-3: rgba(20, 24, 20, 0.36);
+  --dsw-alias-bg-mask-drop: rgba(255, 255, 255, 0.72);
+  --dsw-alias-bg-mask-photo: rgba(20, 24, 20, 0.9);
+  --dsw-alias-bg-module-platform: rgba(238, 240, 233, 0.9);
+  --dsw-alias-bg-multi-select: rgba(238, 240, 233, 0.9);
+  --dsw-alias-bg-overlay: rgba(250, 251, 247, 0.97);
+  --dsw-alias-bg-skeleton: rgba(20, 24, 20, 0.05);
+
+  --dsw-alias-border-inverted: rgba(20, 24, 20, 0.05);
+  --dsw-alias-border-inverted2: rgba(20, 24, 20, 0.08);
+  --dsw-alias-border-l1: rgba(20, 24, 20, 0.1);
+  --dsw-alias-border-l2: rgba(20, 24, 20, 0.18);
+  --dsw-alias-border-l2-darkmode-thin: rgba(20, 24, 20, 0.12);
+  --dsw-alias-border-l3: rgba(138, 136, 0, 0.55);
+  --dsw-alias-border-l4: rgba(20, 24, 20, 0.28);
+
+  --dsw-alias-brand-primary: #14170f;
+  --dsw-alias-brand-primary-invert: #f2f3ee;
+  --dsw-alias-brand-text: #f7f8f4;
+  --dsw-alias-button-primary-fill: #14170f;
+  --dsw-alias-button-primary-hover: #2a2f24;
+  --dsw-alias-button-primary-dimmed: rgba(20, 23, 15, 0.4);
+  --dsw-alias-button-contrast-fill: #14170f;
+  --dsw-alias-button-elevated-fill: rgba(255, 255, 253, 0.94);
+  --dsw-alias-button-floating-fill: rgba(255, 255, 253, 0.96);
+  --dsw-alias-button-floating-hover: rgba(236, 238, 229, 0.98);
+  --dsw-alias-button-info-fill: #4d4c00;
+  --dsw-alias-button-info-hover: #6b6a00;
+  --dsw-alias-button-ghost-active-fill: rgba(138, 136, 0, 0.14);
+  --dsw-alias-button-ghost-active-hover: rgba(138, 136, 0, 0.2);
+  --dsw-alias-button-ghost-active-border: rgba(138, 136, 0, 0.5);
+
+  --dsw-alias-interactive-bg-hover: rgba(20, 24, 20, 0.05);
+  --dsw-alias-interactive-bg-hover-accent: rgba(138, 136, 0, 0.12);
+  --dsw-alias-interactive-bg-hover-danger: rgba(200, 40, 36, 0.1);
+  --dsw-alias-interactive-bg-hover-solid: rgba(236, 238, 229, 0.96);
+  --dsw-alias-interactive-bg-active: rgba(138, 136, 0, 0.18);
+
+  --dsw-alias-label-primary: #14170f;
+  --dsw-alias-label-primary-bluish: #1c2115;
+  --dsw-alias-label-primary-dimmed: #2c331f;
+  --dsw-alias-label-primary-foreground: #f7f8f4;
+  --dsw-alias-label-primary-inverted: #f7f8f4;
+  --dsw-alias-label-secondary: #4a5049;
+  --dsw-alias-label-tertiary: #6e756c;
+  --dsw-alias-label-caption: #8c9389;
+  --dsw-alias-label-dimmed: #c3c8be;
+  --dsw-alias-label-deep-diving: #6b6a00;
+  --dsw-alias-label-deep-diving-shimmer: #b3b12a;
+  --dsw-alias-label-shimmer: rgba(20, 24, 20, 0.28);
+  --dsw-alias-label-document-preview: #3c423a;
+  --dsw-alias-link: #6b6a00;
+  --dsw-alias-menu-icon: #3c423a;
+
+  --dsw-alias-markdown-citation: rgba(236, 238, 229, 0.9);
+  --dsw-alias-markdown-code-block: rgba(240, 242, 235, 0.9);
+  --dsw-alias-markdown-code-block-banner: rgba(232, 235, 226, 0.95);
+  --dsw-alias-markdown-code-segment-selected: rgba(255, 255, 253, 0.95);
+  --dsw-alias-markdown-code-segment-unselected: rgba(232, 235, 226, 0.8);
+  --dsw-alias-markdown-inline-code: rgba(20, 24, 20, 0.05);
+  --dsw-alias-markdown-placeholder: rgba(222, 226, 216, 0.9);
+  --dsw-alias-markdown-tag: rgba(138, 136, 0, 0.12);
+
+  --dsw-alias-scrollbar-bg-l1: rgba(20, 24, 20, 0.2);
+  --dsw-alias-scrollbar-bg-l2: rgba(20, 24, 20, 0.18);
+  --dsw-alias-scrollbar-hover-l1: rgba(20, 24, 20, 0.42);
+  --dsw-alias-scrollbar-hover-l2: rgba(20, 24, 20, 0.34);
+
+  --dsw-alias-state-business-primary: #6b6a00;
+  --dsw-alias-state-business-tertiary: rgba(138, 136, 0, 0.14);
+  --dsw-alias-state-error-primary: #c82824;
+  --dsw-alias-state-error-secondary: #d8493f;
+  --dsw-alias-state-idle-primary: #b6bcb1;
+  --dsw-alias-state-success-primary: #5c7a12;
+  --dsw-alias-state-success-secondary: #77961f;
+  --dsw-alias-state-success-tertiary: rgba(119, 150, 31, 0.14);
+  --dsw-alias-state-warn-label: #8a6a00;
+  --dsw-alias-state-warn-primary: #a08a00;
+  --dsw-alias-state-warn-secondary: #c0a800;
+  --dsw-alias-state-warn-tertiary: rgba(192, 168, 0, 0.14);
+
+  --dsw-alias-switch-thumb: #ffffff;
+  --dsw-alias-toast-bg: rgba(20, 24, 20, 0.94);
+  --dsw-alias-toast-label: #f7f8f4;
+  --dsw-alias-tooltip-bg: rgba(20, 24, 20, 0.95);
+  --dsw-alias-tooltip-key-bg: rgba(255, 255, 255, 0.2);
+  --dsw-alias-turn-trigger-bg: rgba(20, 24, 20, 0.05);
+  --dsw-alias-turn-trigger-bg-hover: rgba(138, 136, 0, 0.14);
+
+  --dsw-alias-code-diff-added: rgba(92, 122, 18, 0.1);
+  --dsw-alias-code-diff-deleted: rgba(200, 40, 36, 0.1);
+  --dsw-alias-file-diff-added-bg: #e8f0d6;
+  --dsw-alias-file-diff-added-gutter: #eff5e4;
+  --dsw-alias-file-diff-added-marker: #5c7a12;
+  --dsw-alias-file-diff-deleted-bg: #f6e2df;
+  --dsw-alias-file-diff-deleted-gutter: #fbeceb;
+  --dsw-alias-file-diff-deleted-marker: #c82824;
+
+  --dsw-specific-bubble: rgba(255, 255, 253, 0.86);
+  --dsw-specific-bubble-highlight: rgba(138, 136, 0, 0.16);
+  --dsw-specific-input-major: rgba(255, 255, 253, 0.88);
+  --dsw-specific-login-input: rgba(247, 248, 244, 0.92);
+  --dsw-specific-menu: rgba(252, 253, 250, 0.92);
+  --dsw-menu-surface-fill: rgba(252, 253, 250, 0.92);
+  --dsw-alias-menu-group-header-fill: rgba(252, 253, 250, 0.97);
+  --dsw-specific-selector: rgba(138, 136, 0, 0.16);
+  --dsw-specific-sidebar-fill: rgba(244, 246, 240, 0.86);
+  --dsw-specific-sidebar-nav-item-active: rgba(138, 136, 0, 0.16);
+  --dsw-specific-sidebar-nav-item-active-accent: rgba(138, 136, 0, 0.2);
+  --dsw-specific-sidebar-nav-item-hover: rgba(20, 24, 20, 0.05);
+  --dsw-specific-tip: rgba(238, 240, 233, 0.94);
+
+  --dsw-alias-onboarding-accent: #6b6a00;
+  --dsw-alias-onboarding-card-fill: rgba(250, 251, 247, 0.9);
+  --dsw-alias-onboarding-secondary-fill: rgba(255, 255, 253, 0.96);
+  --dsw-alias-onboarding-checkbox-border: rgba(20, 24, 20, 0.24);
+
+  --dsw-elevation-stroke-color: rgba(20, 24, 20, 0.16);
+  --dsw-shadow-lv2: 0 6px 22px rgba(20, 24, 20, 0.14);
+  --dsw-shadow-lv3: 0 0 0 1px rgba(20, 24, 20, 0.12), 0 14px 34px rgba(20, 24, 20, 0.16);
+  --dsw-menu-backdrop-filter: blur(14px) saturate(120%);
+
+  --dsh-scrollbar-thumb: rgba(20, 24, 20, 0.2);
+  --dsh-scrollbar-thumb-hover: rgba(20, 24, 20, 0.42);
+
+  --ef-art: url(assets/endfield-field-day.jpg);
+
+  background-color: transparent;
+}
+
+/* The light backdrop carries less contrast, so its scrim is lighter too. */
+body:not([data-ds-dark-theme]) #ef-backdrop .ef-scrim {
+  background:
+    radial-gradient(120% 90% at 50% 42%, rgba(238, 240, 233, 0.2) 0%, rgba(238, 240, 233, 0.5) 60%, rgba(228, 231, 222, 0.78) 100%),
+    linear-gradient(180deg, rgba(240, 242, 236, 0.5) 0%, rgba(240, 242, 236, 0.22) 30%, rgba(238, 240, 233, 0.36) 74%, rgba(228, 231, 222, 0.62) 100%);
+}
+
+body:not([data-ds-dark-theme]) #ef-backdrop .ef-grid {
+  background-image:
+    linear-gradient(rgba(20, 24, 20, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(20, 24, 20, 0.05) 1px, transparent 1px),
+    linear-gradient(rgba(107, 106, 0, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(107, 106, 0, 0.06) 1px, transparent 1px);
+}
+
+body:not([data-ds-dark-theme]) #ef-backdrop .ef-tape { opacity: 0.34; }
+body:not([data-ds-dark-theme]) #ef-backdrop .ef-bracket { opacity: 0.4; }
+
+/* An occupied conversation needs more ground under the text than an empty one:
+   the artwork steps back so the transcript stays readable at every width. */
+html[data-ef-conversation='on'] #ef-backdrop .ef-art {
+  filter: brightness(0.66) saturate(0.74) contrast(1.04);
+}
+
+html[data-ef-conversation='on'] #ef-backdrop .ef-scrim {
+  background:
+    radial-gradient(130% 96% at 50% 42%, rgba(5, 6, 6, 0.18) 0%, rgba(5, 6, 6, 0.46) 58%, rgba(5, 6, 6, 0.82) 100%),
+    linear-gradient(180deg, rgba(5, 6, 6, 0.6) 0%, rgba(5, 6, 6, 0.3) 26%, rgba(5, 6, 6, 0.38) 72%, rgba(5, 6, 6, 0.74) 100%);
+}
+
+body:not([data-ds-dark-theme]) html[data-ef-conversation='on'] #ef-backdrop .ef-art,
+html[data-ef-conversation='on'] body:not([data-ds-dark-theme]) #ef-backdrop .ef-art {
+  filter: brightness(1.02) saturate(0.34) contrast(0.94);
+}
+
+html[data-ef-conversation='on'] body:not([data-ds-dark-theme]) #ef-backdrop .ef-scrim {
+  background:
+    radial-gradient(130% 96% at 50% 42%, rgba(238, 240, 233, 0.42) 0%, rgba(238, 240, 233, 0.62) 58%, rgba(228, 231, 222, 0.86) 100%),
+    linear-gradient(180deg, rgba(240, 242, 236, 0.6) 0%, rgba(240, 242, 236, 0.44) 30%, rgba(238, 240, 233, 0.52) 74%, rgba(228, 231, 222, 0.74) 100%);
+}
+
+/* The conversation text column sits on its own glass, so the art never has to
+   be dimmed to the point of disappearing. */
+[data-phase='active'] [data-conversation-scroll] {
+  background: linear-gradient(
+    90deg,
+    rgba(5, 6, 6, 0.46) 0%,
+    rgba(5, 6, 6, 0.24) 14%,
+    rgba(5, 6, 6, 0.24) 86%,
+    rgba(5, 6, 6, 0.46) 100%
+  );
+}
+
+/* A soft halo under the transcript buys contrast without another veil. */
+html[data-ef-conversation='on'] [data-conversation-scroll] {
+  text-shadow: 0 0 14px rgba(5, 6, 6, 0.55);
+}
+
+body:not([data-ds-dark-theme]) [data-phase='active'] [data-conversation-scroll] {
+  background: linear-gradient(
+    90deg,
+    rgba(240, 242, 236, 0.4) 0%,
+    rgba(240, 242, 236, 0.16) 12%,
+    rgba(240, 242, 236, 0.16) 88%,
+    rgba(240, 242, 236, 0.4) 100%
+  );
+}
+
+/* ==========================================================================
+   4. Shell surfaces
+   ========================================================================== */
+
+
+/* Structure is a 1px hairline, never a wide border. */
+[data-slot='sidebar'] > div,
+[class*='sidebarCol'] > [data-slot='sidebar'] {
+  border-right: 1px solid var(--dsw-alias-border-l1);
+}
+
+/* Deliberately NO backdrop-filter on the sidebar. It is a full-height element
+   whose width animates on every collapse/expand, and a backdrop-filter layer
+   there is exactly the shape that leaves a stuck compositing layer behind: the
+   column keeps its width but stops painting, which reads as "the sidebar
+   disappeared". The whale-fantasy skin reached the same conclusion for the same
+   reason, and its README records the measurement. */
+[data-slot='sidebar'] > div {
+  background-color: var(--dsw-specific-sidebar-fill);
+}
+
+/* Sidebar header row: brand + window drag strip, underlined like a nameplate.
+   The brand is pulled out of the flex flow and centred on the column, level
+   with the window's caption buttons; the collapse toggle keeps the right edge
+   (it is the only in-flow child left, and the shell already right-aligns it).
+   The row is short on purpose: at 60px tall the mark sat a caption-bar below
+   the window buttons, at 40px it lands in the same band. */
+[data-slot='sidebar'] [data-window-drag] {
+  position: relative;
+  height: 40px;
+  min-height: 40px;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
+}
+
+[data-slot='sidebar'] [data-window-drag] > button[class*='brand'] {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: auto;
+  max-width: calc(100% - 40px);
+  margin: 0;
+}
+
+[data-slot='sidebar'] [data-window-drag] [class*='brandIdentity'] {
+  justify-content: center;
+}
+
+/* The session title is the sidebar's own information read back at the top of
+   the conversation; the header keeps its tabs, utilities and corner. */
+[data-slot='conversation.session.header'] nav[class*='crumbs'] {
+  display: none;
+}
+
+/* Collapsed to the 55px rail the sidebar is easy to read as "gone". Make the
+   way back out unmistakable: the rail's own toggle turns into a lit yellow
+   control, and the rail keeps a hazard edge. (`Ctrl+Alt+B` toggles it too.) */
+html[data-ef-rail='on'] [data-slot='sidebar'] {
+  border-right: 1px solid var(--ef-y-45) !important;
+}
+
+html[data-ef-rail='on'] [data-slot='sidebar'] button[class*='toggle'] {
+  border: 1px solid var(--ef-y-45) !important;
+  background-color: var(--ef-y-12) !important;
+  border-radius: 3px;
+  box-shadow: 0 0 0 1px rgba(242, 240, 19, 0.12), 0 0 18px rgba(242, 240, 19, 0.14);
+}
+
+html[data-ef-rail='on'] [data-slot='sidebar'] button[class*='toggle']:hover {
+  background-color: var(--ef-y-20) !important;
+}
+
+/* 新会话 — the one solid hazard-yellow control on screen. */
+button[class*='newSession'] {
+  background-color: var(--ef-y) !important;
+  color: #070a08 !important;
+  border: 0 !important;
+  border-radius: 2px !important;
+  font-weight: 600;
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+  box-shadow: 0 0 0 1px rgba(242, 240, 19, 0.4), 0 6px 18px rgba(242, 240, 19, 0.14);
+}
+
+button[class*='newSession']:hover {
+  background-color: var(--ef-y-hi) !important;
+}
+
+button[class*='newSession'] svg { color: #070a08; }
+
+/* Panel list rows (插件 / 任务看板 / 技能中心 …). */
+nav[class*='panelList'] button[class*='panelRow'] {
+  border-radius: 2px;
+}
+
+nav[class*='panelList'] button[class*='panelRow'][aria-current],
+nav[class*='panelList'] button[class*='panelRow'][data-active='true'] {
+  color: var(--dsw-alias-label-primary);
+}
+
+/* Session rows: the active one gets a yellow left rail, not a filled pill. */
+[data-slot='sidebar.workspaces'] [aria-selected='true'],
+[data-slot='sidebar.workspaces'] [data-selected='true'] {
+  position: relative;
+}
+
+[data-slot='sidebar.workspaces'] [aria-selected='true']::before,
+[data-slot='sidebar.workspaces'] [data-selected='true']::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  background: var(--ef-y);
+}
+
+/* Conversation header: a thin instrument bar. Its fill is a token because the
+   desktop title-bar band has to continue it exactly (see 4b). */
+[data-slot='conversation.header'] > header,
+[class*='centerCol'] header[data-window-drag] {
+  background-color: var(--ef-header-fill);
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
+}
+
+body[data-ds-dark-theme] {
+  --ef-header-fill: rgba(6, 8, 8, 0.42);
+}
+
+body:not([data-ds-dark-theme]) {
+  --ef-header-fill: rgba(248, 250, 245, 0.5);
+}
+
+[data-slot='conversation.header'] [class*='title'],
+[data-slot='conversation.session.header'] {
+  font-family: var(--ef-mono);
+  letter-spacing: 0.06em;
+}
+
+/* The composer: a cut-corner instrument panel with the yellow focus edge.
+   No `backdrop-filter` here on purpose — a non-none backdrop-filter makes the
+   card the containing block for the shell's fixed-position tooltips, which
+   drags the conversation around on hover. */
+[data-composer-card='true'] {
+  background-color: var(--dsw-specific-input-major) !important;
+  border: 1px solid var(--dsw-alias-border-l2) !important;
+  border-radius: 3px !important;
+  clip-path: polygon(
+    0 0,
+    calc(100% - 13px) 0,
+    100% 13px,
+    100% 100%,
+    13px 100%,
+    0 calc(100% - 13px)
+  );
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.42);
+  transition: border-color 0.16s var(--ef-ease), box-shadow 0.16s var(--ef-ease);
+}
+
+[data-composer-card='true']:focus-within {
+  border-color: var(--ef-y-45) !important;
+  box-shadow: 0 0 0 1px var(--ef-y-20), 0 0 24px rgba(242, 240, 19, 0.1), 0 12px 34px rgba(0, 0, 0, 0.42);
+}
+
+[data-slot='conversation.composer'] [class*='inputWrap'],
+[data-slot='conversation.composer'] [class*='composerBar'],
+[data-slot='conversation.input.dock'] > div > div {
+  border-radius: 3px;
+}
+
+[data-slot='conversation.composer'] textarea,
+[data-slot='conversation.composer'] [contenteditable='true'],
+[data-composer-input] {
+  caret-color: var(--ef-y);
+}
+
+/* Small radius scale: the shell's default 12–28px pills read as a consumer app,
+   the cut-corner / near-square language is what makes this read as an instrument. */
+body {
+  --dsw-radius-xs: 2px;
+  --dsw-radius-sm: 3px;
+  --dsw-radius-md: 4px;
+  --dsw-radius-lg: 6px;
+  --dsw-radius-xl: 8px;
+  --dsw-radius-panel: 10px;
+}
+
+/* Selection is yellow-on-charcoal, like a terminal highlight. */
+::selection {
+  background: var(--ef-y-20);
+  color: var(--dsw-alias-label-primary);
+}
+
+/* Focus rings: a yellow outline with the cut-corner offset. */
+:focus-visible {
+  outline: 1px solid var(--ef-y) !important;
+  outline-offset: 1px !important;
+}
+
+/* Code and readouts use the skin's monospace; the shell's first choice
+   (`SF Mono`) does not exist on Windows and fell back silently. The two
+   shipped faces take over the rest: Endfield Sans SC for the whole UI, and
+   Endfield Tech for numerals, Latin labels and headings. */
+body {
+  --dsw-font-family: var(--ef-sans);
+  --dsw-font-family-brand: var(--ef-din);
+  --ds-font-family-code: var(--ef-mono);
+  --dsw-font-markdown-code: 12px/19px var(--ef-mono);
+  --dsw-font-markdown-code-font-family: var(--ef-mono);
+  --dsw-font-markdown-code-block: 11px/19px var(--ef-mono);
+  --dsw-font-markdown-code-block-font-family: var(--ef-mono);
+  --dsw-font-markdown-code-block-small: 11px/16px var(--ef-mono);
+  --dsw-font-markdown-code-block-small-font-family: var(--ef-mono);
+}
+
+/* Headings get the technical face and the weight the industrial register wants:
+   Latin and digits come from Endfield Tech, Chinese falls through to the
+   heavy end of Endfield Sans SC. */
+[class*='MarkdownText'] h1,
+[class*='MarkdownText'] h2,
+[class*='MarkdownText'] h3,
+[class*='MarkdownText'] h4,
+[class*='markdown'] h1,
+[class*='markdown'] h2,
+[class*='markdown'] h3,
+[class*='markdown'] h4 {
+  font-family: var(--ef-din);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+[role='dialog'] h2,
+[class*='title'] {
+  font-weight: 600;
+}
+
+/* Readouts and chips: condensed, letterspaced, unmistakably an instrument. */
+[class*='panelTitle'],
+[class*='newSessionLabel'],
+[class*='sessionTitle'],
+[class*='workspaceLabel'],
+[class*='pill'],
+[class*='Pill'],
+[class*='badge'],
+[class*='Badge'],
+[class*='footCard'],
+[class*='stat'] {
+  font-family: var(--ef-din);
+  letter-spacing: 0.015em;
+}
+
+code,
+kbd,
+pre,
+[class*='codeBlock'],
+[class*='CodeBlock'] {
+  font-family: var(--ef-mono) !important;
+}
+
+/* Scrollbars: a yellow hairline, no track. */
+* {
+  scrollbar-color: var(--dsh-scrollbar-thumb) transparent;
+}
+
+/* Right dock / details column. */
+[class*='rightbarCol'] {
+  border-left: 1px solid var(--dsw-alias-border-l1);
+  background-color: var(--dsw-alias-bg-layer-1);
+}
+
+/* Dialogs and menus: charcoal glass, hairline stroke, near-square corners.
+   Deliberately no clip-path here — dialogs host their own overflowing menus. */
+[role='dialog'] {
+  border-radius: 3px !important;
+  background-color: var(--dsw-alias-bg-layer-3) !important;
+  box-shadow: 0 0 0 1px var(--dsw-alias-border-l2), 0 26px 64px rgba(0, 0, 0, 0.55);
+}
+
+[role='dialog'] > [class*='panel'],
+[role='dialog'] > [class*='modal'] {
+  border-radius: 3px !important;
+}
+
+/* Tooltips inherit the same mono readout voice. */
+[role='tooltip'] {
+  font-family: var(--ef-mono);
+  letter-spacing: 0.02em;
+}
+
+/* The resize handles between columns. */
+[class*='handle'][data-side] {
+  background: transparent;
+}
+
+[class*='handle'][data-side]:hover {
+  background: var(--ef-y-20);
+}
+
+/* ==========================================================================
+   4b. Title bar (desktop)
+   --------------------------------------------------------------------------
+   Three layers stack in the top 40px on Windows, and all three have to end up
+   saying the same thing:
+
+     1. the shell's own band — `[data-windows-titlebar] .BynINW_frame:before`,
+        a full-width strip of `--dsw-specific-sidebar-fill` (the app's own way
+        of making the title bar match the sidebar), behind everything;
+     2. the page content — the frame carries
+        `padding-top: var(--dsh-windows-titlebar-height)`, so nothing real is
+        drawn inside that band;
+     3. the Windows Controls Overlay — three caption buttons over a fill the
+        preload measures and pushes to the main process.
+
+   Layer 3 is the problem. It paints ABOVE the page and it is one colour, so on
+   top of layer 1 it double-layers the same translucent token and the strip ends
+   up denser than the sidebar beside it — after the splash ends that step is the
+   "very obvious difference" at y = 40. `setTitleBarOverlay` takes a single CSS
+   colour, so a gradient cannot be handed to it; the fix is to stop it painting
+   and let the page's own band show.
+
+   The thing it measures is a hidden <span> the preload appends to <body> with
+   those two tokens written into its inline style. Overriding just that element
+   is surgical — every real surface keeps its tokens and the caption strip goes
+   transparent. If a later build changes the probe's markup the selector simply
+   stops matching and the strip reverts to today's behaviour; the splash-scoped
+   override in splash.css is the second line of defence. */
+body > span[style*='visibility:hidden'][style*='--dsw-specific-sidebar-fill'],
+body > span[style*='visibility: hidden'][style*='--dsw-specific-sidebar-fill'] {
+  background-color: transparent !important;
+}
+
+/* Layer 1, re-cut. The stock band is one colour across the whole window, but
+   two different surfaces sit below it (the sidebar column, then the
+   conversation column, then the right dock when it is open), so one colour can
+   only ever match one of them. theme.js measures the conversation column into
+   --ef-col-left / --ef-col-right and the band is painted to match what is
+   actually underneath each segment — over the artwork, because this theme makes
+   the frame transparent and the art is the ground. */
+[data-windows-titlebar] [data-slot='root'] > div::before {
+  background: linear-gradient(
+    90deg,
+    var(--dsw-specific-sidebar-fill) 0,
+    var(--dsw-specific-sidebar-fill) var(--ef-col-left, 280px),
+    var(--ef-header-fill) var(--ef-col-left, 280px),
+    var(--ef-header-fill) var(--ef-col-right, 100%),
+    var(--dsw-alias-bg-layer-1) var(--ef-col-right, 100%)
+  ) !important;
+}
+
+/* ==========================================================================
+   4c. Brand
+   --------------------------------------------------------------------------
+   The sidebar's product mark is replaced by theme.js: the Endfield crest plus
+   「终末地工业」and an ENDFIELD tag. The shell's own mark and wordmark are
+   React-owned, so they are hidden rather than removed and the replacement is
+   appended beside them — see decorateBrand().
+   ========================================================================== */
+
+html[data-ef-brand='on'] [data-slot='sidebar.brand.mark'],
+html[data-ef-brand='on'] [data-slot='sidebar.brand.name'] {
+  display: none !important;
+}
+
+.ef-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ef-brand__mark {
+  display: inline-flex;
+  flex: none;
+  width: 22px;
+  height: 19px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.ef-brand__mark svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.ef-brand__name {
+  font-family: var(--ef-sans);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-primary);
+}
+
+/* The tag mirrors the shape the stock HARNESS badge had, recoloured: charcoal
+   with hazard-yellow type on the pale sidebar, inverted on the charcoal one. */
+.ef-brand__badge {
+  flex: none;
+  font-family: var(--ef-din);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  line-height: 1;
+  text-transform: uppercase;
+  padding: 3px 6px 2px;
+  border-radius: 2px;
+  background: #0a0c0c;
+  color: var(--ef-y);
+}
+
+body[data-ds-dark-theme] .ef-brand__badge {
+  background: var(--ef-y);
+  color: #070a08;
+}
+
+/* ==========================================================================
+   5. Splash — 开屏动画
+   --------------------------------------------------------------------------
+   Moved to client/splash.css. The splash is delivered as an index-injection
+   row so it is on screen before the shell renders, which means its rules must
+   not depend on this sheet (this one arrives with the script, hundreds of
+   milliseconds later). Everything it needs — its own tokens, its font stacks,
+   its asset URLs — is in that file.
+   ========================================================================== */
+
+@keyframes ef-art-in {
+  from { opacity: 0; transform: scale(1.06); }
+  to { opacity: 1; transform: scale(1.02); }
+}
+
+/* Users who asked the system for less motion get the theme, not the theatre.
+   (The splash has its own reduced-motion rule in splash.css, which runs before
+   this sheet exists.) */
+@media (prefers-reduced-motion: reduce) {
+  #ef-backdrop .ef-art { animation: none; }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}

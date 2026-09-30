@@ -1,0 +1,7 @@
+# Normalise line endings: the sources are LF on disk, and a Windows checkout
+# should not rewrite them into something a Linux DSH then has to read back.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.woff2 binary

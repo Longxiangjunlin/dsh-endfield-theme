@@ -1,0 +1,9 @@
+# dependencies (this package has none, but a local install may add them)
+node_modules/
+pnpm-lock.yaml
+package-lock.json
+
+# scratch
+*.log
+.DS_Store
+Thumbs.db

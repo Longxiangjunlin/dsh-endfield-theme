@@ -1,0 +1,395 @@
+/* ==========================================================================
+   dsh-endfield-theme — 开屏动画 (first-paint sheet)
+   --------------------------------------------------------------------------
+   This sheet is the ONLY part of the theme that runs before the shell renders,
+   so it is deliberately self-contained:
+
+     * no dependency on theme.css (it defines its own `--efs-*` values, and the
+       font stacks are written out rather than taken from `--ef-mono`);
+     * asset URLs are ROOT-RELATIVE (`/dsh-endfield/assets/...`) because the
+       document is `dsh-app://app/` on the desktop and `http://127.0.0.1:PORT/`
+       in a browser — the plugin route is the one path that resolves on both
+       (`/assets/` is special-cased by the desktop protocol handler, which is
+       why the plugin's own `/dsh-endfield/assets/` prefix matters);
+     * the layer carries a failsafe: the clock animation below also hides the
+       splash at 5s, so a page whose script never arrives is not blocked.
+
+   It is delivered two ways from the same files: inlined into an
+   `{kind:"html"}` index-injection row (the first-paint path), and served at
+   /dsh-endfield/splash.css for the runtime fallback in theme.js.
+   ========================================================================== */
+
+:root {
+  --efs-y: #f2f013;
+  --efs-y-45: rgba(242, 240, 19, 0.45);
+  --efs-ink: #050606;
+  --efs-mono: "Cascadia Mono", "Cascadia Code", Consolas, "SF Mono", ui-monospace, monospace;
+  --efs-ease: cubic-bezier(0.22, 0.9, 0.16, 1);
+}
+
+/* The canvas is painted before anything else exists. `body` is included
+   because the shell's own boot row sets `body{background-color:#fff}`, and a
+   later same-specificity rule is what beats it. theme.css takes body back to
+   transparent (with !important) once it arrives. */
+html,
+body {
+  background-color: var(--efs-ink);
+}
+
+/* --------------------------------------------------------------------------
+   Caption buttons (Windows Controls Overlay)
+   --------------------------------------------------------------------------
+   The preload measures a hidden probe element whose background is
+   `--dsw-specific-sidebar-fill` and whose color is `--dsw-alias-label-primary`,
+   then hands both to the main process, which applies them with
+   setTitleBarOverlay({ color, symbolColor }). It re-measures when
+   `html[lang]` or `body[data-ds-dark-theme]` mutates — so while the splash is
+   up we swap those two tokens and let the boot script's poke re-send them.
+
+   The fill is TRANSPARENT, not charcoal. The overlay is painted above the page,
+   so a flat colour can only ever be a rectangle lying on top of the artwork —
+   and `setTitleBarOverlay` takes a single CSS colour, so a gradient cannot be
+   handed to it at all (the main process validates it with
+   /^(?:#[\da-f]{3,8}|rgba?\([\d.,%\s]+\))$/ and would drop
+   `linear-gradient(...)` before Electron ever saw it). Transparent hands those
+   40px back to the page instead, where the splash's own grid, vignette and
+   hazard rail already extend — so the strip carries the same gradients as the
+   rest of the screen instead of interrupting them. The DSH welcome window does
+   the same thing (`color: "#00000000"` + acrylic).
+
+   Scoped to the splash window: if alpha were ever ignored, the failure mode is
+   an opaque black strip — which is what the splash wants anyway.
+
+   theme.css already makes the strip transparent for good by overriding the
+   preload's probe element; this rule is the second line of defence, so that
+   even if that selector stops matching a future build the splash still gets a
+   black strip rather than a pale one. The symbol colour is load-bearing either
+   way — it is the only channel the yellow glyphs have. */
+html[data-ef-splash='on'] body {
+  --dsw-specific-sidebar-fill: rgba(5, 6, 6, 0);
+  --dsw-alias-label-primary: #f2f013;
+}
+
+#ef-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  overflow: hidden;
+  background-color: var(--efs-ink);
+  color: #edf0ea;
+  cursor: default;
+  contain: layout paint style;
+  /* Clock + failsafe: currentTime is read by theme.js to work out how much of
+     the timeline is left, and the end state unblocks the UI if it never does. */
+  animation: ef-splash-clock 1ms linear 5000ms forwards;
+}
+
+#ef-splash::before {
+  content: '';
+  position: absolute;
+  inset: -12%;
+  background-image:
+    linear-gradient(rgba(242, 240, 19, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(242, 240, 19, 0.07) 1px, transparent 1px);
+  background-size: 46px 46px;
+  opacity: 0;
+  animation: ef-grid-in 0.7s var(--efs-ease) 0.05s forwards;
+}
+
+#ef-splash::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(120% 90% at 50% 50%, rgba(5, 6, 6, 0) 30%, rgba(5, 6, 6, 0.9) 100%);
+  pointer-events: none;
+}
+
+.ef-splash__tape {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 12px;
+  background-image: repeating-linear-gradient(115deg, var(--efs-y) 0 12px, #0a0c0c 12px 26px);
+  transform: scaleX(0);
+  animation: ef-tape-in 0.5s var(--efs-ease) 0.1s forwards;
+}
+
+/* On the desktop the top 40px belong to the caption strip. That strip is
+   transparent while the splash runs, so the rail can sit at y=0 again — it just
+   has to get out of the way of the three buttons, which is what the mask does:
+   the hazard stripes fade out over the last 170px instead of running under the
+   glyphs. (Masking the right end also means this stays correct if alpha is ever
+   ignored and the strip renders opaque.) */
+.ef-splash__tape--top { top: 0; }
+html[data-windows-titlebar] .ef-splash__tape--top {
+  mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 170px), transparent calc(100% - 148px));
+}
+.ef-splash__tape--bottom { bottom: 0; }
+
+/* Title-bar band. The strip no longer paints anything, so the page owns those
+   40px: this sinks them a shade deeper than the body (the hazard-yellow glyphs
+   want a quiet field) and fades out well below the strip, so there is no edge
+   at its boundary. Desktop only — without a strip there is nothing to align to,
+   and the browser rendering stays exactly as it was. */
+.ef-splash__band {
+  display: none;
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: calc(var(--dsh-windows-titlebar-height, 40px) * 2.6);
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.55) 0,
+    rgba(0, 0, 0, 0.3) calc(100% / 2.6),
+    rgba(0, 0, 0, 0) 100%
+  );
+  pointer-events: none;
+}
+
+html[data-windows-titlebar] .ef-splash__band { display: block; }
+
+.ef-splash__scan {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 34vh;
+  top: -40vh;
+  background: linear-gradient(
+    180deg,
+    rgba(242, 240, 19, 0) 0%,
+    rgba(242, 240, 19, 0.05) 38%,
+    rgba(242, 240, 19, 0.42) 50%,
+    rgba(242, 240, 19, 0.05) 62%,
+    rgba(242, 240, 19, 0) 100%
+  );
+  mix-blend-mode: screen;
+  animation: ef-scan 1.25s cubic-bezier(0.5, 0, 0.35, 1) 0.28s forwards;
+}
+
+.ef-splash__stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  animation: ef-stage-out 0.42s var(--efs-ease) 2.74s forwards;
+}
+
+.ef-splash__log {
+  position: absolute;
+  left: clamp(24px, 6vw, 96px);
+  bottom: clamp(64px, 12vh, 132px);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-family: var(--efs-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(237, 240, 234, 0.62);
+}
+
+.ef-splash__log span {
+  opacity: 0;
+  animation: ef-line-in 0.45s var(--efs-ease) forwards;
+}
+
+.ef-splash__log span b {
+  color: var(--efs-y);
+  font-weight: 500;
+}
+
+/* Emblem watermark: the crest from the shipped emblem sheet, almost invisible. */
+.ef-splash__emblem {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(92vh, 56vw);
+  height: min(92vh, 56vw);
+  transform: translate(-50%, -52%) scale(1.04);
+  background-image: url(/dsh-endfield/assets/endfield-emblem.png);
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: 0;
+  animation: ef-emblem-in 1.6s var(--efs-ease) 0.3s forwards;
+}
+
+.ef-splash__mark {
+  position: relative;
+  width: min(52vw, 620px);
+  height: calc(min(52vw, 620px) * 0.242);   /* 880×213 asset */
+  opacity: 0;
+  animation: ef-mark-in 0.5s var(--efs-ease) 0.62s forwards;
+}
+
+/* The wordmark itself, revealed left→right as the scan band passes. */
+.ef-splash__mark::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url(/dsh-endfield/assets/endfield-mark-zh.png);
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  clip-path: inset(0 100% 0 0);
+  animation: ef-wipe 0.78s cubic-bezier(0.32, 0, 0.2, 1) 0.72s forwards;
+}
+
+/* The bright leading edge of that reveal. */
+.ef-splash__mark::after {
+  content: '';
+  position: absolute;
+  top: -8%;
+  bottom: -8%;
+  left: 0;
+  width: 2px;
+  background: var(--efs-y);
+  box-shadow: 0 0 18px 4px rgba(242, 240, 19, 0.55);
+  opacity: 0;
+  animation: ef-edge 0.78s cubic-bezier(0.32, 0, 0.2, 1) 0.72s forwards;
+}
+
+.ef-splash__rule {
+  width: min(52vw, 620px);
+  height: 1px;
+  margin-top: 4px;
+  background: linear-gradient(90deg, transparent, var(--efs-y-45) 12%, var(--efs-y-45) 88%, transparent);
+  transform: scaleX(0);
+  animation: ef-rule 0.7s var(--efs-ease) 1.34s forwards;
+}
+
+.ef-splash__bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: min(52vw, 620px);
+  margin-top: 10px;
+  font-family: var(--efs-mono);
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  color: rgba(237, 240, 234, 0.5);
+}
+
+.ef-splash__bar u {
+  position: relative;
+  flex: 1;
+  height: 3px;
+  background: rgba(237, 240, 234, 0.14);
+  overflow: hidden;
+}
+
+.ef-splash__bar u::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--efs-y);
+  transform-origin: left center;
+  transform: scaleX(0);
+  animation: ef-fill 1.15s cubic-bezier(0.3, 0, 0.2, 1) 1.45s forwards;
+}
+
+/* The English wordmark, small and dimmed, bottom right. */
+.ef-splash__tag {
+  position: absolute;
+  right: clamp(24px, 6vw, 96px);
+  bottom: clamp(60px, 11vh, 124px);
+  width: clamp(150px, 14vw, 210px);
+  height: clamp(31px, 2.92vw, 44px);          /* 760×158 asset */
+  background-image: url(/dsh-endfield/assets/endfield-mark-en.png);
+  background-size: contain;
+  background-position: right center;
+  background-repeat: no-repeat;
+  opacity: 0;
+  animation: ef-line-in 0.5s var(--efs-ease) 1.75s forwards;
+}
+
+/* Exit: content fades, then the whole screen collapses like a CRT. */
+#ef-splash.is-done {
+  animation: ef-splash-out 0.4s cubic-bezier(0.7, 0, 0.9, 0.4) 0.24s forwards;
+}
+
+#ef-splash.is-done .ef-splash__tape {
+  animation: ef-tape-out 0.22s var(--efs-ease) forwards;
+}
+
+#ef-splash.is-done .ef-splash__scan { display: none; }
+
+@keyframes ef-splash-clock {
+  to { opacity: 0; visibility: hidden; pointer-events: none; }
+}
+
+@keyframes ef-grid-in {
+  from { opacity: 0; transform: scale(1.04); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes ef-tape-in {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@keyframes ef-tape-out {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}
+
+@keyframes ef-scan {
+  from { top: -40vh; }
+  to { top: 118vh; }
+}
+
+@keyframes ef-mark-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* The wordmark reveal: a hard left→right wipe with the leading edge lit. */
+@keyframes ef-wipe {
+  from { clip-path: inset(0 100% 0 0); }
+  to { clip-path: inset(0 0 0 0); }
+}
+
+@keyframes ef-edge {
+  0% { opacity: 0; left: 0; }
+  8% { opacity: 1; }
+  92% { opacity: 1; }
+  100% { opacity: 0; left: 100%; }
+}
+
+@keyframes ef-emblem-in {
+  from { opacity: 0; transform: translate(-50%, -52%) scale(1.1); }
+  to { opacity: 0.055; transform: translate(-50%, -52%) scale(1.04); }
+}
+
+@keyframes ef-line-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes ef-rule {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@keyframes ef-fill {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@keyframes ef-stage-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes ef-splash-out {
+  from { opacity: 1; clip-path: inset(0 0 0 0); }
+  to { opacity: 0; clip-path: inset(49.4% 0 49.4% 0); pointer-events: none; }
+}
+
+/* Users who asked the system for less motion get the theme, not the theatre. */
+@media (prefers-reduced-motion: reduce) {
+  #ef-splash { display: none !important; }
+}

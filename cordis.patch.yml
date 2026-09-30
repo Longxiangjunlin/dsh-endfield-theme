@@ -1,0 +1,7 @@
+# dsh bundle patch — inserts the Endfield theme into a profile's layer stack.
+#
+# The plugin is host-only (no dsh.client facet): it registers one prefix route
+# and one index-injection row, and the browser half is a plain script it serves.
+- insert:
+    - id: dsh-endfield-theme
+      name: dsh-endfield-theme
