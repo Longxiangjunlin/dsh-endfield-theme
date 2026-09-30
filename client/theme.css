@@ -941,12 +941,18 @@ html[data-ef-brand='on'] [data-slot='sidebar.brand.name'] {
 }
 
 /* The mark is the supplied Endfield lockup itself, not a redrawn stand-in. It
-   is duotone — 49% of its opaque pixels are black and 46% are white — so one
-   file cannot serve both sidebars: on the pale fill its white half vanishes, on
-   the charcoal fill its black half does. Hence two assets, the second being the
-   same art with the paint inverted and the holes left as holes. At this size the
-   wordmark inside the lockup is not readable and does not need to be; it reads
-   as the crest-over-triangle silhouette next to the name that spells it out. */
+   is duotone — 49% of its opaque pixels are black and 46% are white — and it is
+   the white half that carries it: the crest's contour lines and the `终末地`
+   wordmark are white paint. So the supplied art is drawn for a *dark* surface,
+   and one file cannot serve both sidebars:
+
+     -dark-bg   the art untouched         → the charcoal sidebar
+     -light-bg  black and white swapped   → the pale sidebar
+
+   Getting them the wrong way round is not obvious: the mark still renders and
+   the silhouettes still read — only the wordmark sinks into the background. At
+   this size the wordmark is not readable anyway and does not need to be; it
+   reads as the crest-over-triangle shape next to the name that spells it out. */
 .ef-brand__mark {
   display: inline-block;
   flex: none;
