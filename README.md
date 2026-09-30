@@ -219,8 +219,17 @@ body > span[style*='visibility:hidden'][style*='--dsw-specific-sidebar-fill'] {
 
 品牌呈现是 DSH **设计上可替换**的一环——官方在自己的 `@deepseek-ai/dsh-client-ui-brand-official`
 里写明「自有身份的部署……组合另一个占据侧栏 slot 的包，占据 slot 是唯一的组合路径」
-（详见 [`NOTICE.md`](NOTICE.md) 第 3 节）。不过**把一套主题装在自己的客户端上，和把它发布出去
-是两件事**：分发前请自行判断商标问题。不想要这一处，见下面的开关。
+（原文见 [`NOTICE.md`](NOTICE.md) 第 3 节）。所以这一处走的是外壳提供的扩展点，
+不是绕开机制去改它。
+
+两件需要讲明的事：
+
+- **「终末地工业 / ENDFIELD INDUSTRIES」是鹰角的商标**，本仓库不主张它。品牌素材的出处、
+  版权归属与分发条件见 [`NOTICE.md`](NOTICE.md)；fork 或再打包时，那份同人非商业的义务
+  随文件一起走。
+- 若权利人认为本仓库这种分发方式不妥，联系作者即可移除。
+
+不想要这一处、保留其余部分：在 DSH Web 地址后加 `?dsh-endfield-brand=0`。
 
 做法：
 
