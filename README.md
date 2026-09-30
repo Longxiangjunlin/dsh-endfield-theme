@@ -11,7 +11,7 @@ is plain CSS/JS. No build step, no skin center required.
 
 ![开屏动画](preview/splash.jpg)
 
-| 深色（完全体） | 浅色（雪原 daylight） |
+| 深色（推荐） | 浅色（雪原 daylight） |
 | --- | --- |
 | ![dark](preview/dark.jpg) | ![light](preview/light.jpg) |
 
@@ -49,7 +49,7 @@ is plain CSS/JS. No build step, no skin center required.
 
 ## 开屏为什么是"注入行"而不是脚本搭的
 
-这是这一版最重要的结构决定。原版客户端**没有**独立开屏环节：启动时看到的其实是
+这是整个主题里最关键的结构决定。原版客户端**没有**独立开屏环节：启动时看到的其实是
 **官方 boot 底色（浅色 `#fff` / 深色 `#151517`）加上外壳第一帧**。要让开屏成为首帧，
 就必须在"外壳渲染之前"进 DOM。
 
@@ -119,8 +119,8 @@ probe.style.cssText = "position:fixed;visibility:hidden;pointer-events:none;"
 // 只在 html[lang] 或 body[data-ds-dark-theme] 变动时重新测量并上报
 ```
 
-也就是说**这排按键的颜色本来就归这套主题管**——开屏期间之所以突兀，只是没人通知它重算。
-但底下还藏着一层更麻烦的事：**桌面端顶部那 40 px 其实压了三层**，而它们必须说同一件事。
+也就是说**这排按键的颜色本来就归这套主题管**，开屏期间显得突兀只是因为没有触发重算。
+但还有一层：**桌面端顶部那 40 px 压了三层**，而三层必须说同一件事。
 
 | 层 | 是什么 | 谁画的 |
 | --- | --- | --- |
@@ -128,8 +128,8 @@ probe.style.cssText = "position:fixed;visibility:hidden;pointer-events:none;"
 | ② | 页面内容 —— frame 带 `padding-top: var(--dsh-windows-titlebar-height)`，那 40 px 里没有真东西 | 外壳 |
 | ③ | 三个按键 + 一层填充色 | Windows Controls Overlay，画在页面**之上** |
 
-问题就出在 ③ 叠在 ① 上：两层同一个半透明 token，条子比旁边的侧边栏更稠一档——开屏一结束，
-y = 40 那道台阶就是你说的"非常明显的区别"。而 `setTitleBarOverlay` 只收**一个 CSS 颜色**
+问题出在 ③ 叠在 ① 上：两层同一个半透明 token，条子比旁边的侧边栏更稠一档，
+于是在 y = 40 处留下一道可见的台阶。而 `setTitleBarOverlay` 只收**一个 CSS 颜色**
 （DSH 主进程还有一道 `/^(?:#[\da-f]{3,8}|rgba?\([\d.,%\s]+\))$/` 校验，`linear-gradient(...)`
 根本到不了 Electron），渐变给不进去；正确做法是**让它别画**。
 
@@ -171,7 +171,7 @@ body > span[style*='visibility:hidden'][style*='--dsw-specific-sidebar-fill'] {
   | | `color` | `symbolColor` |
   | --- | --- | --- |
   | 开屏期间 | `rgba(0, 0, 0, 0)` 透明 | `rgba(242, 240, 19, 1)` 警戒黄 |
-  | 常态 | `rgba(0, 0, 0, 0)` 透明 ← 这次的改动 | `rgba(20, 23, 15, 1)` 正文色 |
+  | 常态 | `rgba(0, 0, 0, 0)` 透明 | `rgba(20, 23, 15, 1)` 正文色 |
 
   同一时刻读到外壳那条带子的计算值，可以逐段对上：
 
@@ -207,23 +207,27 @@ body > span[style*='visibility:hidden'][style*='--dsw-specific-sidebar-fill'] {
   whale-fantasy 皮肤得出过同样结论并在 README 里量过。装饰层同时从 `<body>` 首个子元素改为
   追加到末尾，避开任何 `body > :first-child` 假设。
 
-## 品牌位换成了终末地工业
+## 品牌位
 
 | 浅色模式（雪原侧栏） | 深色模式（炭黑侧栏） |
 | --- | --- |
 | ![brand](preview/brand.png) | |
 
-**这是个纯个人化改动，先说清楚**：侧边栏左上那个位置原本是 DeepSeek Harness 的产品标识
-（鲸标 + `deepseek` + `HARNESS` 徽章）。换掉之后，客户端在界面里就不再自称 DSH 了——
-窗口标题、对话框、插件页里的产品名都还是 DSH，只有这一处变了。自己用没问题，
-要分发给别人就得自己判断商标这件事。
+**这是本主题里唯一会改动产品标识的一处**：侧边栏左上原本是 DeepSeek Harness 的产品标识
+（鲸标 + `deepseek` + `HARNESS` 徽章），启用后换成「终末地工业」。窗口标题、对话框与插件页
+里的产品名不受影响，仍然显示 DSH。
+
+品牌呈现是 DSH **设计上可替换**的一环——官方在自己的 `@deepseek-ai/dsh-client-ui-brand-official`
+里写明「自有身份的部署……组合另一个占据侧栏 slot 的包，占据 slot 是唯一的组合路径」
+（详见 [`NOTICE.md`](NOTICE.md) 第 3 节）。不过**把一套主题装在自己的客户端上，和把它发布出去
+是两件事**：分发前请自行判断商标问题。不想要这一处，见下面的开关。
 
 做法：
 
 - 图标就是**官方 lockup 原图**（冠部 + `终末地 / ENDFIELD INDUSTRIES` + 倒三角），
   没有重画、没有描摹，只是缩到 28px。这个尺寸下里面的字标读不出来，也不指望读出来——
   它承担的是"剪影"，名字由旁边的「终末地工业」写清楚。
-- **必须出两份素材，而且很容易搞反**。原图是双色的：不透明像素里 49% 纯黑、46% 纯白，
+- **两份素材缺一不可，且极易用反**。原图是双色的：不透明像素里 49% 纯黑、46% 纯白，
   而**白色那半才是主角**——冠部的等高线、`终末地` 字标、`ENDFIELD INDUSTRIES` 那条细线
   全是白颜料。所以**原图是给深色底画的**：
 
@@ -232,8 +236,8 @@ body > span[style*='visibility:hidden'][style*='--dsw-specific-sidebar-fill'] {
   | 深色（炭黑） | `endfield-lockup-dark-bg.png` | 原图原样 |
   | 浅色（雪原） | `endfield-lockup-light-bg.png` | 黑白对调，镂空保持镂空 |
 
-  搞反了**不会报错、也不会崩**：图形照样渲染、轮廓照样看得见，只有字标悄悄沉进背景里——
-  得专门去量才算得出来。`tools/check_brand_lockup.py`（在作者工作区，不随仓库分发）
+  用反了**不会报错、也不会崩**：图形照样渲染、轮廓照样看得见，只有字标悄悄沉进背景里——
+  只能靠量才查得出来。`tools/check_brand_lockup.py`（在维护者工作区，不随仓库分发）
   就是干这个的：取字标那一段，数深色与浅色像素，要求浅底那份是深字、深底那份是浅字。
 - 文案是「终末地工业」+ 一枚 `ENDFIELD` 徽章，位置与原来 `deepseek` + `HARNESS` 一一对应；
   徽章浅色下是炭黑底黄字、深色下反过来。
@@ -243,7 +247,7 @@ body > span[style*='visibility:hidden'][style*='--dsw-specific-sidebar-fill'] {
   不会和 React 打乒乓。
 - 按钮自己的 `aria-label`（新建会话）没动，整个标识区本来就是 `aria-hidden`，
   所以这个改动不影响这个按钮"是什么、干什么"。
-- 想临时看回原样：`http://127.0.0.1:19387/?dsh-endfield-brand=0`
+- 想关掉这一处、保留其余部分：在 DSH Web 地址后加 `?dsh-endfield-brand=0`。
 
 ## 字体
 
@@ -304,24 +308,29 @@ dsh-endfield-theme/
 ├─ package.json                 dsh.bundle.patch 指向下面的 patch
 ├─ cordis.patch.yml             一条 insert 行
 ├─ lib/index.js                 host 半区：prefix 路由 + 四条 index 注入行 + tapIndex
+├─ test/host.test.mjs           host 半区测试（npm test）
 ├─ client/
 │  ├─ splash.css                开屏：自给自足的首帧样式表（+ 兜底自动隐藏 + 按键配色覆盖）
 │  ├─ splash.html               开屏 DOM（与 splash.css 合成一条 html 注入行）
 │  ├─ theme.css                 @font-face + L1 token 重映射 + L2 外壳面重切 + HUD 取景框
-│  ├─ theme.js                  浏览器半区：样式表、背景层、取景框、开屏时序、状态标记
+│  ├─ theme.js                  浏览器半区：样式表、背景层、取景框、开屏时序、品牌位
 │  └─ assets/
-│     ├─ endfield-field.jpg         深色背景（1920×1080，烘过的主视觉）
-│     ├─ endfield-field-day.jpg     浅色背景
-│     ├─ endfield-mark-zh.png       终末地 + ENDFIELD INDUSTRIES 字标（白，15 KB）
-│     ├─ endfield-mark-zh-dark.png  同一枚字标的墨黑版（浅底用，19 KB）
-│     ├─ endfield-mark-en.png       纯英文 ENDFIELD INDUSTRIES 字标（白，14 KB）
-│     ├─ endfield-emblem.png        徽记冠部白线稿，开屏底纹（13 KB）
-│     ├─ endfield-icon.svg          站点图标
+│     ├─ endfield-field.jpg            深色背景（1920×1080，烘过的主视觉）
+│     ├─ endfield-field-day.jpg        浅色背景
+│     ├─ endfield-lockup-dark-bg.png   完整 lockup，深色侧栏用（原图）
+│     ├─ endfield-lockup-light-bg.png  同一 lockup，浅色侧栏用（黑白对调）
+│     ├─ endfield-mark-zh.png          终末地 + ENDFIELD INDUSTRIES 字标（白）
+│     ├─ endfield-mark-zh-dark.png     同一枚字标的墨黑版（浅底用）
+│     ├─ endfield-mark-en.png          纯英文 ENDFIELD INDUSTRIES 字标（白）
+│     ├─ endfield-emblem.png           徽记冠部白线稿，开屏底纹
+│     ├─ endfield-icon.svg             站点图标
 │     └─ fonts/
-│        ├─ endfield-sans-sc.woff2  Noto Sans SC 子集（1.95 MB）
-│        ├─ endfield-tech.woff2     Saira 子集（105 KB）
-│        └─ OFL-*.txt               两份 SIL OFL 1.1 许可证
-└─ preview/                     dark / light / splash / splash-strip / firstpaint-*
+│        ├─ endfield-sans-sc.woff2     Noto Sans SC 子集（1.95 MB）
+│        ├─ endfield-tech.woff2        Saira 子集（105 KB）
+│        └─ OFL-*.txt                  两份 SIL OFL 1.1 许可证
+├─ contrib/awesome-dsh-plugin.yml   提交到插件目录用的条目
+└─ preview/                     dark / light / splash / splash-strip / brand /
+                                titlebar-band / firstpaint-*
 ```
 
 路由只有一条：`/dsh-endfield/*`（`theme.css`、`theme.js`、`splash.css`、`splash.html`、`assets/*`）。
@@ -329,20 +338,18 @@ dsh-endfield-theme/
 
 ## 开关与调试
 
-- 临时不播开屏：`http://127.0.0.1:19387/?dsh-endfield-splash=0`
-- 临时看回原品牌：`http://127.0.0.1:19387/?dsh-endfield-brand=0`
-- 控制台重播开屏：`__dshEndfieldTheme.replay()`
-- 侧边栏收起/展开：点轨道里那枚点亮的鲸标按钮，或 **Ctrl+Alt+B**
-- 系统「减少动态效果」开启时：不播开屏，背景动效全部关掉，主题照常生效
-- 想要完全体：设置 → 通用 → 外观 切到**深色**（浅色是雪原变体，深色才是终末地的语言）
+以下开关都通过 URL 查询参数生效，加在 DSH Web 地址后面：
 
-**哪一半改动需要重启**：`client/` 下的文件按请求读盘，改完刷新即可；
-`lib/index.js` 是宿主半区，桌面端的注入表在宿主启动时采集一次 —— 所以**改注入行要重启客户端**，
-浏览器形态则是下一次请求就重新采集。
+- `?dsh-endfield-splash=0` —— 不播开屏
+- `?dsh-endfield-brand=0` —— 保留 DSH 原品牌位，主题其余部分照常
+- 控制台重播开屏：`__dshEndfieldTheme.replay()`
+- 侧边栏收起/展开：点轨道里那枚高亮的侧栏按钮，或 **Ctrl+Alt+B**
+- 系统「减少动态效果」开启时：不播开屏，背景动效全部关掉，主题照常生效
+- 推荐配置：设置 → 通用 → 外观 切到**深色**（浅色是雪原变体，深色才是终末地的语言）
 
 ## 怎么验的
 
-主题不是"看着差不多"就交的。仓库里带一份 host 半区的测试，不需要跑起整个 harness：
+验证分两层。仓库里带一份 host 半区测试，不需要跑起整个 harness：
 
 ```sh
 npm test        # = node test/host.test.mjs
@@ -350,8 +357,10 @@ npm test        # = node test/host.test.mjs
 
 `test/host.test.mjs` 把一个假的 cordis root 喂给插件，然后断言注入行的种类、顺序与内容，
 路由的 content-type、目录重定向、HEAD、405/403/404、路径逃逸 fail-closed，以及 tap 幂等与卸载。
+设 `DSH_ENDFIELD_PKG` 可以把它指向已安装或已解包的副本——`npm pack` 会遵循 `files` 字段，
+所以工作区里能过的测试，未必能保证发出去的包是完整的。
 
-其余验证是在作者的工作区里跑的一次性链路（不进仓库，因为都依赖本机的 profile 与凭据）：
+其余验证是维护者在工作区里跑的一次性链路（不进仓库，因为都依赖本机的 profile 与凭据）：
 
 | 工具 | 作用 |
 | --- | --- |
@@ -370,7 +379,7 @@ npm test        # = node test/host.test.mjs
 
 ## 授权
 
-代码 MIT（[`LICENSE`](LICENSE)）。**但仓库里带的素材不全是我的**，详见 [`NOTICE.md`](NOTICE.md)：
+代码 MIT（[`LICENSE`](LICENSE)）。**但仓库里包含第三方素材**，详见 [`NOTICE.md`](NOTICE.md)：
 
 - 字体：**Noto Sans SC** 与 **Saira**，均为 SIL OFL 1.1，子集化后随插件分发，许可证全文在
   `client/assets/fonts/`。
