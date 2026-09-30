@@ -283,7 +283,7 @@ body > span[style*='visibility:hidden'][style*='--dsw-specific-sidebar-fill'] {
 ## 安装
 
 ```sh
-dsh plugin --profile desktop add github:760403-create/dsh-endfield-theme
+dsh plugin --profile desktop add github:Longxiangjunlin/dsh-endfield-theme
 dsh plugin --profile desktop remove dsh-endfield-theme     # 卸载
 ```
 

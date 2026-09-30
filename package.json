@@ -30,13 +30,13 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/760403-create/dsh-endfield-theme.git"
+    "url": "git+https://github.com/Longxiangjunlin/dsh-endfield-theme.git"
   },
-  "homepage": "https://github.com/760403-create/dsh-endfield-theme#readme",
+  "homepage": "https://github.com/Longxiangjunlin/dsh-endfield-theme#readme",
   "bugs": {
-    "url": "https://github.com/760403-create/dsh-endfield-theme/issues"
+    "url": "https://github.com/Longxiangjunlin/dsh-endfield-theme/issues"
   },
-  "author": "760403-create",
+  "author": "Longxiangjunlin",
   "license": "MIT",
   "dsh": {
     "bundle": {
