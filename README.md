@@ -12,11 +12,17 @@ Windows Controls Overlay 那 40 px、以及由 preload 打上的 `data-windows-t
 | 形态 | 验证到什么程度 |
 | --- | --- |
 | **浏览器**（`http://127.0.0.1:PORT/`） | `preview/` 里**每一张图**都是无头 Edge 打在这个真实地址上拍的。注入行与开屏首帧、背景层、HUD 取景框、品牌位、标题栏条带，全部在这条路径上量过 |
-| **桌面端**（Electron 窗口） | 注入行、WCO 那 40 px、caption 按钮的取色，来自**读 DSH 源码 + 在浏览器里复刻 preload 的标记**。其中 caption 条与顶部警戒带**已在真实窗口里肉眼核对过**，但没有挂调试口做量化；「首帧是不是开屏」至今只有源码层面的推断 |
+| **桌面端**（Electron 窗口） | 注入行、WCO 那 40 px、caption 按钮的取色，来自**读 DSH 源码 + 在浏览器里复刻 preload 的标记**，并在真实窗口里核对过。**有一处已知差别**：桌面端在开屏出现之前，会有几帧应用自己的 boot 卡可见 |
 
-一个反直觉但值得记下的事实：**"首帧即开屏"是浏览器形态证出来的**，不是桌面端。
-浏览器那条路径把注入行**直接渲染进服务端 HTML**，所以它们一定在任何脚本之前存在；
-桌面端要到运行时才由注入行解释器套用，机理不同、时点也不同。
+**"首帧即开屏"只在浏览器形态成立。** 浏览器那条路径把注入行**直接渲染进返回的 HTML**，
+所以它们必然早于任何脚本；桌面端的 `index.html` 是包装 dist 里一个 825 字节的静态文件，
+由 `dsh-app://` 直出、不经过 web 服务器，注入行要等 `dshDesktopBoot.ready()` 的一次 IPC
+往返之后才落地——那时 boot 卡已经画完了。
+
+这个缺口**插件补不上**，原因和取舍写在 [`NOTES.md`](NOTES.md)：
+前端的行解释器里 `script-preload` 是空实现、`preload-app.cjs` 也不认识它，所以不存在
+"首帧之前"的通道；窗口的 `backgroundColor` 与 `show:false` 时机属于主进程。
+注入行在桌面端的价值是"**在插件能触及的最早时刻**把 boot 卡换成开屏"，不是消除闪烁。
 
 English: an Arknights: Endfield themed client plugin for the DeepSeek Harness Web
 GUI — charcoal industrial HUD, a single hazard-yellow accent, a boot splash and a
