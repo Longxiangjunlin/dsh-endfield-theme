@@ -213,7 +213,7 @@ dsh-endfield-theme/
 │     ├─ endfield-lockup-light-bg.png  同一 lockup，浅色侧栏用（黑白对调）
 │     ├─ endfield-mark-zh.png          终末地 + ENDFIELD INDUSTRIES 字标（白）
 │     ├─ endfield-mark-en.png          纯英文 ENDFIELD INDUSTRIES 字标（白）
-│     ├─ endfield-emblem.png           徽记冠部白线稿，开屏底纹
+│     ├─ endfield-emblem-full.png      徽记去字标后的冠部与倒三角，开屏底纹
 │     ├─ endfield-icon.svg             站点图标
 │     └─ fonts/
 │        ├─ endfield-sans-sc.woff2     Noto Sans SC 子集（2.0 MB）

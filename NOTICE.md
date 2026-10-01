@@ -47,7 +47,7 @@ files.
 | `client/assets/endfield-lockup-dark-bg.png` | 同一 lockup，**深色侧栏用**（原样） |
 | `client/assets/endfield-mark-zh.png` | `终末地 / ENDFIELD INDUSTRIES` 字标（白） |
 | `client/assets/endfield-mark-en.png` | `ENDFIELD INDUSTRIES` 字标（白） |
-| `client/assets/endfield-emblem.png` | 徽记冠部线稿（开屏底纹） |
+| `client/assets/endfield-emblem-full.png` | 徽记去掉两行字标后的冠部与倒三角（开屏底纹；保留字标会与擦写动画叠出鬼影） |
 | `client/assets/endfield-icon.svg` | 站点图标（由徽记冠部矢量化重绘） |
 
 ### 1.2 对话区背景 / Conversation backdrop

@@ -9,6 +9,7 @@
 // is missing a file. Running it against the tarball is what catches that.
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
@@ -166,6 +167,29 @@ assert.equal(art.body.subarray(0, 2).toString('hex'), 'ffd8', 'JPEG magic')
 const icon = call('/dsh-endfield/assets/endfield-icon.svg')
 assert.equal(icon.status, 200)
 assert.equal(icon.headers['content-type'], 'image/svg+xml; charset=utf-8')
+
+// Every asset the browser half names must actually be there, and must be served.
+// A renamed art file whose reference was not updated is a silent 404: the splash
+// would render without that layer and nothing else would complain.
+const clientDir = join(packageDir, 'client')
+const named = new Set()
+for (const file of ['splash.css', 'splash.html', 'theme.css', 'theme.js']) {
+  if (!existsSync(join(clientDir, file))) continue
+  const source = readFileSync(join(clientDir, file), 'utf8')
+  // Require a real extension: the client also writes the route shape as a
+  // placeholder in comments, which is not a reference to anything.
+  for (const match of source.matchAll(/\/dsh-endfield\/assets\/([\w.\-/]+\.(?:png|jpe?g|webp|avif|gif|svg|woff2?))/g)) {
+    named.add(match[1])
+  }
+}
+assert.ok(named.size >= 5, `expected the client to name several assets, found ${named.size}`)
+for (const asset of named) {
+  assert.ok(
+    existsSync(join(clientDir, 'assets', asset)),
+    `${asset} is referenced by the client but missing from client/assets/`,
+  )
+  assert.equal(call(`/dsh-endfield/assets/${asset}`).status, 200, `${asset} is referenced but not served`)
+}
 
 // The splash sheet and markup are served too: theme.js falls back to fetching
 // them when a page got the script without the injection row.

@@ -202,7 +202,10 @@ html[data-windows-titlebar] .ef-splash__band { display: block; }
   font-weight: 500;
 }
 
-/* Emblem watermark: the crest from the shipped emblem sheet, almost invisible. */
+/* Emblem watermark: the crest and the wedge from the supplied emblem, held at
+   .055 behind everything. The image carries no wordmark of its own — the splash
+   wipes that same text in on top of it, and a copy underneath would be visible
+   wherever the wipe has not reached yet. */
 .ef-splash__emblem {
   position: absolute;
   left: 50%;
@@ -210,7 +213,7 @@ html[data-windows-titlebar] .ef-splash__band { display: block; }
   width: min(92vh, 56vw);
   height: min(92vh, 56vw);
   transform: translate(-50%, -52%) scale(1.04);
-  background-image: url(/dsh-endfield/assets/endfield-emblem.png);
+  background-image: url(/dsh-endfield/assets/endfield-emblem-full.png);
   background-size: contain;
   background-position: center;
   background-repeat: no-repeat;
