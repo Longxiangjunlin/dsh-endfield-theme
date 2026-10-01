@@ -50,6 +50,13 @@ if (dshDesktopBoot !== undefined) {
 | ![with](preview/firstpaint-with.png) | ![without](preview/firstpaint-without.png) |
 | 首帧就是开屏（网格 + 上下警戒带 + BOOT 条，字标还没擦写到） | 首帧只有官方 boot 底色，空的 |
 
+> **这组 A/B 是浏览器形态的。** 用的是**服务端** index（`http://127.0.0.1:PORT/` 返回的
+> HTML），那里注入行是**直接渲染进文档**的，所以它们必定早于任何脚本——"首帧即开屏"由此成立。
+> 桌面端不同：dist 的 `index.html` 是静态的，四行要到运行时才由注入行解释器套用，
+> 时点依赖 `dshDesktopBoot.ready()`。桌面端的窗口又是 `show:false` 到加载完才显示，
+> 所以那条路径上"第一笔"是什么，本仓库没有实测数据，只有源码层面的推断。
+> 两边结论很可能一致，但**证据强度不一样**，不该混着读。
+
 `splash.css` 因此必须**自给自足**：自己定义 `--efs-*`、字体栈写死、素材走**根相对路径**
 `/dsh-endfield/assets/...`。桌面文档是 `dsh-app://app/`、浏览器是 `http://127.0.0.1:PORT/`，
 只有插件这条路由两边都成立 —— `/assets/` 在桌面协议处理器里是特例（直出打包 dist），

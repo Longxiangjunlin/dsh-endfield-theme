@@ -4,9 +4,19 @@
 带**开屏动画**与**对话区背景**。它是一个普通的 DSH 客户端插件（host 半区发一条路由 +
 四条 index 注入行，浏览器半区是纯 CSS/JS），不依赖皮肤中心，也不需要构建步骤。
 
-桌面端与浏览器端共用同一份前端，主题两边都生效；其中**开屏首帧**与**标题栏重切**依赖桌面端
-独有的机理（注入行下发时机、Windows Controls Overlay），在浏览器形态下表现为普通的开屏与
-普通的分栏。
+桌面端与浏览器端渲染的是同一份前端，主题两边都生效。差别只在桌面端**多一层窗口装饰**：
+Windows Controls Overlay 那 40 px、以及由 preload 打上的 `data-windows-titlebar` 标记。
+
+**验证覆盖并不对称**，这点直说，免得读者按同一份信任去读两件事：
+
+| 形态 | 验证到什么程度 |
+| --- | --- |
+| **浏览器**（`http://127.0.0.1:PORT/`） | `preview/` 里**每一张图**都是无头 Edge 打在这个真实地址上拍的。注入行与开屏首帧、背景层、HUD 取景框、品牌位、标题栏条带，全部在这条路径上量过 |
+| **桌面端**（Electron 窗口） | 注入行、WCO 那 40 px、caption 按钮的取色，是**读 DSH 源码 + 在浏览器里复刻 preload 的标记**得出的结论，没有直接挂在 Electron 渲染进程上验证过 |
+
+一个反直觉但值得记下的事实：**"首帧即开屏"是浏览器形态证出来的**，不是桌面端。
+浏览器那条路径把注入行**直接渲染进服务端 HTML**，所以它们一定在任何脚本之前存在；
+桌面端要到运行时才由注入行解释器套用，机理不同、时点也不同。
 
 English: an Arknights: Endfield themed client plugin for the DeepSeek Harness Web
 GUI — charcoal industrial HUD, a single hazard-yellow accent, a boot splash and a
@@ -14,10 +24,13 @@ conversation backdrop. The host half serves one asset route and four
 index-injection rows; the browser half is plain CSS/JS. No build step, no skin
 center required.
 
-The desktop app and the browser front end render the same UI, so the theme applies
-to both. Two details are desktop-only, because they depend on machinery the
-browser transport does not have (the timing of injection rows, and the Windows
-Controls Overlay): the splash being the first paint, and the re-cut title bar.
+The desktop app and the browser render the same front end, so the theme applies to
+both; the desktop only adds window chrome (the 40px Windows Controls Overlay and
+the `data-windows-titlebar` marker the preload sets). Verification is lopsided and
+worth stating: every image under `preview/` was captured in headless Edge against
+the served web address, while the desktop-only behaviour was reasoned from DSH's
+source and by reproducing the preload's markers in the browser, not by attaching to
+the Electron renderer.
 
 ![开屏动画](preview/splash.jpg)
 
