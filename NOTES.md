@@ -67,6 +67,33 @@ if (dshDesktopBoot !== undefined) {
 >
 > 真要消掉它得动 DSH 本身：给 dist 的 `index.html` 加内联底色（或静态开屏）、把窗口
 > `backgroundColor` 设成炭黑、或者把 `show` 推迟到注入行套用之后。三条都在插件边界之外。
+>
+> ### 改 dist 那一份文档：试过了，只能解决一半
+>
+> 下面是实测记录，写给下一个想走这条路的人——**别从 CSS 入手，会输**。
+>
+> dist 的 `index.html` 里加内联样式，会遇到应用自己的一条规则：
+>
+> ```css
+> body { background: var(--dsw-alias-bg-base, #fff) }
+> ```
+>
+> 它在层叠里位置比静态 `<style>` 靠后，所以两种写法都**实测失败**：
+> 直接写 `body{background:#050606}`（body 实测仍是 `rgb(255,255,255)`），
+> 以及喂它读的变量 `--dsw-alias-bg-base:#050606`（该变量外壳**已经定义成白色**了）。
+>
+> 能生效的是**标记**而不是样式：在 `#root` **之前**放一块
+> `<div style=position:fixed;inset:0;background:#050606;z-index:-1>`。
+> 负 z 索引在 CSS 绘制顺序里正好画在 body 自己的背景之上、所有真实表面之下，
+> 而主题的 `#ef-backdrop`（同样负 z、DOM 更靠后）仍然盖得住它。boot 卡则用
+> `html [data-dsh-boot]{background:#050606}` 重涂——后代组合器把特异性抬到应用那条
+> `._boot_u7vgf_3{…}` 之上，**因此不需要 `!important`**（`!important` 会在外壳跑起来之后
+> 继续生效，把浅色模式的底色一起吃掉）。
+>
+> 结果是：**文档已解析、卡片未创建**与**卡片已显示**这两段都能变成纯黑（隔离测试里两张
+> 截图哈希完全相同），但真实窗口上**仍有一闪**——残留来自页面之上的一层，最可能是窗口自身的
+> `backgroundColor`（Electron 在 Windows 的默认值是白，而 `BrowserWindow` 选项改不到）。
+> 也就是说：**只改 dist 不够，还得同时把窗口底色设成炭黑**。两条都做了才谈得上消除。
 
 `splash.css` 因此必须**自给自足**：自己定义 `--efs-*`、字体栈写死、素材走**根相对路径**
 `/dsh-endfield/assets/...`。桌面文档是 `dsh-app://app/`、浏览器是 `http://127.0.0.1:PORT/`，
