@@ -94,9 +94,9 @@ the Electron renderer.
 
 ## 品牌位
 
-| 浅色模式（雪原侧栏） | 深色模式（炭黑侧栏） |
+| 深色（炭黑侧栏） | 浅色（雪原侧栏） |
 | --- | --- |
-| ![brand](preview/brand.png) | |
+| ![深色品牌位](preview/brand-dark.png) | ![浅色品牌位](preview/brand-light.png) |
 
 **这是本主题里唯一会改动产品标识的一处**：侧边栏左上原本是 DeepSeek Harness 的产品标识
 （鲸标 + `deepseek` + `HARNESS` 徽章），启用后换成「终末地工业」。窗口标题、对话框与插件页
@@ -221,13 +221,13 @@ dsh-endfield-theme/
 │        ├─ endfield-tech.woff2        Saira 子集（105 KiB）
 │        └─ OFL-*.txt                  两份 SIL OFL 1.1 许可证
 ├─ contrib/
-│  ├─ awesome-dsh-plugin.yml        提交到插件目录用的条目（整个文件原样复制过去）
+│  ├─ awesome-dsh-plugin.yml        提交到插件目录用的条目模板（注释不随提交走）
 │  └─ README.md                     投稿步骤与提交前清单，不随提交分发
 ├─ LICENSE                      MIT，含对 client/assets/ 素材的排除声明
 ├─ NOTICE.md                    第三方素材出处与授权
 ├─ NOTES.md                     设计笔记：几处做法的动机、证据与实测
-└─ preview/                     dark / light / splash / splash-strip / brand /
-                                titlebar-band / firstpaint-*
+└─ preview/                     dark / light / splash / splash-strip /
+                                brand-dark / brand-light / titlebar-band / firstpaint-*
 ```
 
 路由只有一条：`/dsh-endfield/*`（`theme.css`、`theme.js`、`splash.css`、`splash.html`、`assets/*`）。
@@ -267,10 +267,14 @@ npm test        # = node test/host.test.mjs
 | `dsh-cookie.mjs` | 用 profile 里的签名密钥签出 web 会话 cookie，好让无头浏览器能打开真实 GUI |
 | `cdp.mjs` | 无头 Edge + CDP：打开真实 GUI、注入脚本、按时间轴冻结动画、截图、读计算结果 |
 | `firstpaint-ab.mjs` | 拿服务端真实 index 生成"插行 / 不插行"两份文档，同一时刻抓帧对比首帧 |
+| `grab-splash.mjs` | 在真实 GUI 里 replay 开屏并把动画停到指定毫秒，抓一帧；`preview/` 的两张开屏图都由它出 |
+| `check-readme.mjs` | 检查文档里的相对链接能否解析、图片是否已被 git 跟踪、每张表格的列数是否一致 |
 
-`preview/` 的图都是**从真实 GUI 里拍的**：`splash*.jpg` 是插件真身注入后按时间轴冻结抓的帧
-（`__dshEndfieldTheme.replay()` + Web Animations `currentTime` 擦洗，所以每帧可复现而不是碰运气），
-`dark.jpg` / `light.jpg` 是同一个 1920×1010 窗口切深浅两套配色后的空对话页。
+`preview/` 的图都是**从真实 GUI 里拍的**，窗口统一 1920×1010、成品缩到 1600×842：
+`splash.jpg` 是插件真身注入后按时间轴冻结抓的一帧，`splash-strip.jpg` 是同一条时间线上的
+四帧拼成 2×2 —— 都靠 `__dshEndfieldTheme.replay()` 重新挂载开屏、再用 Web Animations 的
+`currentTime` 把动画停在绝对时刻，所以每一帧都可复现而不是碰运气。
+`dark.jpg` / `light.jpg` 是同一个窗口切深浅两套配色后的空对话页。
 `firstpaint-with.png` / `firstpaint-without.png` 是首帧 A/B：同一份服务端 HTML，
 一份插入注入行、一份不插，在 load 事件后立刻抓帧。
 
