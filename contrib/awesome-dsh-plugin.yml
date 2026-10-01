@@ -9,11 +9,11 @@
 # Two notes on the description itself:
 #
 #   * `en` contains ": ", so it has to stay quoted or YAML reads it as a nested key.
-#   * It must not claim more than the code does. "first-paint boot splash" was
-#     dropped from an earlier draft: the splash arrives as an injection row, which
-#     is genuinely the first paint on the browser transport but lands a few frames
-#     after the app's own boot card on the desktop. "injected ahead of the shell"
-#     is true on both.
+#   * It must not claim more than the code does. The splash is "injected ahead of
+#     the shell": that holds on both transports, where "first-paint" would only
+#     hold on the browser. There the row is rendered into the served HTML; on the
+#     desktop it arrives one IPC round trip into boot, ahead of the shell but
+#     behind the app's own boot card for a few frames.
 
 url: https://github.com/Longxiangjunlin/dsh-endfield-theme
 name: Longxiangjunlin/dsh-endfield-theme

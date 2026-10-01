@@ -126,11 +126,11 @@ html[data-windows-titlebar] .ef-splash__tape--top {
 }
 .ef-splash__tape--bottom { bottom: 0; }
 
-/* Title-bar band. The strip no longer paints anything, so the page owns those
-   40px: this sinks them a shade deeper than the body (the hazard-yellow glyphs
-   want a quiet field) and fades out well below the strip, so there is no edge
-   at its boundary. Desktop only — without a strip there is nothing to align to,
-   and the browser rendering stays exactly as it was. */
+/* Title-bar band. The overlay strip is transparent, so the page owns those 40px:
+   this sinks them a shade deeper than the body (the hazard-yellow glyphs want a
+   quiet field) and fades out well below the strip, so there is no edge at its
+   boundary. Desktop only — without a strip there is nothing to align to, and the
+   browser rendering stays untouched. */
 .ef-splash__band {
   display: none;
   position: absolute;

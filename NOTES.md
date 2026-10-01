@@ -41,7 +41,7 @@ if (dshDesktopBoot !== undefined) {
 | `style`（head） | `html,body{background-color:#050606}` —— 同优先级后置，压掉官方 boot 底色 |
 | `html`（body） | `<style>splash.css</style>` + `splash.html` **合成一行**，两者不可能被分开套用（否则一个孤儿 `#ef-splash` 会被当裸文本画出来） |
 | `script`（body） | 打 `html[data-ef-splash="on"]` 并 poke 一次 `lang`（见下节）；6 s 兜底撤掉 |
-| `script`（body） | 原来的 loader：拉 `theme.js`（非阻塞、`onerror` 吞掉） |
+| `script`（body） | 加载 `theme.js`（非阻塞、`onerror` 吞掉） |
 
 对比实测（**浏览器形态**）—— 同一份服务端 index，一份插入这四行、一份不插，**同一时刻（load 事件后立刻）抓帧**：
 
