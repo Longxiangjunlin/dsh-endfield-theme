@@ -22,6 +22,13 @@
 :root {
   --efs-y: #f2f013;
   --efs-y-45: rgba(242, 240, 19, 0.45);
+  /* The field the artwork is painted on - charcoal, as it always was.
+
+     An earlier attempt to make the artwork's black shapes readable lightened this to #161a1a.
+     That was treating the symptom: the artwork is black ink with white cut-outs, drawn for a
+     LIGHT page, so on charcoal its black half vanishes. The fix is to invert the artwork
+     instead (see NOTICE: `endfield-emblem.webp` is the supplied file with its colours swapped,
+     text excepted), which leaves this free to stay the theme's charcoal. */
   --efs-ink: #050606;
   --efs-mono: "Cascadia Mono", "Cascadia Code", Consolas, "SF Mono", ui-monospace, monospace;
   --efs-ease: cubic-bezier(0.22, 0.9, 0.16, 1);
@@ -47,8 +54,7 @@ body {
    up we swap those two tokens and let the boot script's poke re-send them.
 
    The fill is TRANSPARENT, not charcoal. The overlay is painted above the page,
-   so a flat colour can only ever be a rectangle lying on top of the artwork —
-   and `setTitleBarOverlay` takes a single CSS colour, so a gradient cannot be
+   so a flat colour can only ever be a rectangle lying on top of the artwork —   and `setTitleBarOverlay` takes a single CSS colour, so a gradient cannot be
    handed to it at all (the main process validates it with
    /^(?:#[\da-f]{3,8}|rgba?\([\d.,%\s]+\))$/ and would drop
    `linear-gradient(...)` before Electron ever saw it). Transparent hands those
@@ -93,6 +99,15 @@ html[data-ef-splash='on'] body {
     linear-gradient(90deg, rgba(242, 240, 19, 0.07) 1px, transparent 1px);
   background-size: 46px 46px;
   opacity: 0;
+  /* The grid fades out behind the artwork.
+
+     The artwork is line art with a dark filled triangle in it, so a grid showing through its
+     transparent areas lands on the triangle's edge and chops it into segments — at which
+     point the frame the artwork draws around itself stops reading as a frame and starts
+     reading as more grid. The grid is here to give the empty field a scale; the middle of the
+     screen is not empty. The mask is in the alpha channel, so `transparent` hides and `#000`
+     shows. */
+  mask-image: radial-gradient(76% 88% at 50% 48%, rgba(0, 0, 0, 0) 0 64%, #000 100%);
   animation: ef-grid-in 0.7s var(--efs-ease) 0.05s forwards;
 }
 
@@ -100,7 +115,12 @@ html[data-ef-splash='on'] body {
   content: '';
   position: absolute;
   inset: 0;
-  background: radial-gradient(120% 90% at 50% 50%, rgba(5, 6, 6, 0) 30%, rgba(5, 6, 6, 0.9) 100%);
+  /* Vignette. It has to stay gentle and start late, because the artwork carries an OUTER
+     outline - a large thin inverted triangle enclosing the crest, the wordmark and the wedge -
+     and those lines sit far enough out to fall inside the darkened band. At the earlier
+     `30% / 0.9` they were crushed to nothing, which is exactly why the artwork looked like it
+     had lost its frame. Kept for the screen-edge falloff, but it now starts past the artwork. */
+  background: radial-gradient(128% 96% at 50% 50%, rgba(5, 6, 6, 0) 56%, rgba(5, 6, 6, 0.72) 100%);
   pointer-events: none;
 }
 
@@ -126,6 +146,57 @@ html[data-windows-titlebar] .ef-splash__tape--top {
 }
 .ef-splash__tape--bottom { bottom: 0; }
 
+/* Corner readouts. The log lines sit bottom-left, which left the top of the screen empty and
+   the whole composition bottom-heavy; these balance it. They start below the caption strip
+   (40px on desktop) so they cannot land under the three window buttons. Both fade in on the
+   same curve as the log lines, a beat earlier. */
+.ef-splash__readout {
+  position: absolute;
+  top: clamp(54px, 6.6vh, 82px);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-family: var(--efs-mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(237, 240, 234, 0.5);
+  pointer-events: none;
+  opacity: 0;
+  animation: ef-line-in 0.45s var(--efs-ease) 0.66s forwards;
+}
+
+.ef-splash__readout b {
+  color: var(--efs-y);
+  font-weight: 500;
+}
+
+.ef-splash__readout--tl { left: clamp(24px, 6vw, 96px); }
+
+.ef-splash__readout--tr {
+  right: clamp(24px, 6vw, 96px);
+  text-align: right;
+}
+
+/* Static CRT texture: a repeating gradient, one layer, painted once and never animated.
+
+   The splash is a picture of an instrument, and a field that is exactly one flat colour reads
+   as a picture of a screen rather than as one. The lines are dark rather than light so they
+   carry across the artwork's white without lifting the charcoal off black, and they are fine
+   enough (1px on, 2px off) to vanish at a glance and only register as texture. */
+.ef-splash__scanlines {
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.26) 0 1px,
+    rgba(0, 0, 0, 0) 1px 3px
+  );
+  pointer-events: none;
+  opacity: 0;
+  animation: ef-frame-in 0.9s linear 0.42s forwards;
+}
+
 /* Title-bar band. The overlay strip is transparent, so the page owns those 40px:
    this sinks them a shade deeper than the body (the hazard-yellow glyphs want a
    quiet field) and fades out well below the strip, so there is no edge at its
@@ -149,31 +220,24 @@ html[data-windows-titlebar] .ef-splash__tape--top {
 
 html[data-windows-titlebar] .ef-splash__band { display: block; }
 
-.ef-splash__scan {
-  position: absolute;
-  left: 0;
-  right: 0;
-  height: 34vh;
-  top: -40vh;
-  background: linear-gradient(
-    180deg,
-    rgba(242, 240, 19, 0) 0%,
-    rgba(242, 240, 19, 0.05) 38%,
-    rgba(242, 240, 19, 0.42) 50%,
-    rgba(242, 240, 19, 0.05) 62%,
-    rgba(242, 240, 19, 0) 100%
-  );
-  mix-blend-mode: screen;
-  animation: ef-scan 1.25s cubic-bezier(0.5, 0, 0.35, 1) 0.28s forwards;
-}
+/* The sweep that used to travel down the screen is gone. It animated `top` on a
+   34vh gradient, which relayouts on every frame instead of running on the
+   compositor — and the wipe it was there to accompany is a horizontal reveal in
+   the middle of the screen, so the vertical pass never lined up with it anyway. */
 
+/* The rule and the bar sit BELOW the artwork's wordmark, not through it. The artwork is
+   `min(92vh, 56vw)` tall, contained and centred a little above centre, so its text block
+   ends at roughly 53% of the viewport height on a wide window; 58vh clears it with room
+   to spare and follows the same vh unit the artwork is sized in, so they stay in step as
+   the window changes. */
 .ef-splash__stage {
   position: absolute;
   inset: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
+  padding-top: 58vh;
   gap: 14px;
   animation: ef-stage-out 0.42s var(--efs-ease) 2.74s forwards;
 }
@@ -202,10 +266,24 @@ html[data-windows-titlebar] .ef-splash__band { display: block; }
   font-weight: 500;
 }
 
-/* Emblem watermark: the crest and the wedge from the supplied emblem, held at
-   .055 behind everything. The image carries no wordmark of its own — the splash
-   wipes that same text in on top of it, and a copy underneath would be visible
-   wherever the wipe has not reached yet. */
+/* The backdrop is the supplied artwork with its colours INVERTED, text excepted — the crest,
+   the bar across the top, the outer triangle outline, the wedge, and its own 终末地 / ENDFIELD
+   INDUSTRIES all in one image, so there is no second copy of anything to ghost against.
+
+   Why invert: the artwork is black ink with white cut-outs, drawn to sit on a light page. On
+   this charcoal field its black half is invisible - five levels of separation out of 255 - so
+   the outer frame and the top bar simply were not there. Swapping the colours puts the ink in
+   white, where it reads, and turns the cut-outs into the dark field showing through: the same
+   drawing, as seen on a dark page. The wordmark is the exception and has to be, because it is
+   already white; inverting it would erase it. It is the only LIGHT content in its own rows, so
+   keeping the light pixels there and inverting everything else selects it exactly.
+
+   It is a re-encoded copy, not the original file: the transformation needs a pixel pass, and
+   the result ships as WebP (q92, 86 KB) because the toolchain here cannot write AVIF.
+
+   Revealed by a wipe that runs on exactly the bar's read-out window (see ef-fill and
+   SPLASH_FILL_* in theme.js), so the artwork - text included - writes itself in as the
+   number climbs, rather than a wipe here and a fill later. */
 .ef-splash__emblem {
   position: absolute;
   left: 50%;
@@ -213,46 +291,39 @@ html[data-windows-titlebar] .ef-splash__band { display: block; }
   width: min(92vh, 56vw);
   height: min(92vh, 56vw);
   transform: translate(-50%, -52%) scale(1.04);
-  background-image: url(/dsh-endfield/assets/endfield-emblem-full.png);
+  background-image: url(/dsh-endfield/assets/endfield-emblem.webp);
   background-size: contain;
   background-position: center;
   background-repeat: no-repeat;
-  opacity: 0;
-  animation: ef-emblem-in 1.6s var(--efs-ease) 0.3s forwards;
-}
-
-.ef-splash__mark {
-  position: relative;
-  width: min(52vw, 620px);
-  height: calc(min(52vw, 620px) * 0.242);   /* 880×213 asset */
-  opacity: 0;
-  animation: ef-mark-in 0.5s var(--efs-ease) 0.62s forwards;
-}
-
-/* The wordmark itself, revealed left→right as the scan band passes. */
-.ef-splash__mark::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image: url(/dsh-endfield/assets/endfield-mark-zh.png);
-  background-size: 100% 100%;
-  background-repeat: no-repeat;
+  opacity: var(--efs-emblem-opacity, 1);
   clip-path: inset(0 100% 0 0);
-  animation: ef-wipe 0.78s cubic-bezier(0.32, 0, 0.2, 1) 0.72s forwards;
+  /* The reveal is the one long animation on a large element. Chromium can composite a
+     `clip-path` animation for a basic shape, but only once the element has its own
+     layer, so say so up front rather than waiting for the first frames to teach it.
+     The cost is one layer for the ~2.9s the splash lives. */
+  will-change: clip-path;
+  animation: ef-wipe 1.15s cubic-bezier(0.3, 0, 0.2, 1) 1.45s forwards;
 }
 
-/* The bright leading edge of that reveal. */
-.ef-splash__mark::after {
+/* The bright leading edge of that reveal, laid on the artwork's own box.
+
+   It is a FULL-WIDTH layer carrying a 2px line at its left, moved with translateX -
+   not a 2px element moved with `left`. Animating `left` relayouts every frame, and this
+   is the one element in the sheet whose whole job is to be watched while it moves. The
+   width being 100% is what makes `translateX(100%)` mean "the parent's width", which is
+   the distance the edge has to travel. */
+.ef-splash__emblem::after {
   content: '';
   position: absolute;
-  top: -8%;
-  bottom: -8%;
+  top: 6%;
+  bottom: 6%;
   left: 0;
-  width: 2px;
-  background: var(--efs-y);
-  box-shadow: 0 0 18px 4px rgba(242, 240, 19, 0.55);
+  width: 100%;
+  background: linear-gradient(90deg, var(--efs-y) 0 2px, rgba(242, 240, 19, 0) 2px);
+  filter: drop-shadow(0 0 9px rgba(242, 240, 19, 0.6));
   opacity: 0;
-  animation: ef-edge 0.78s cubic-bezier(0.32, 0, 0.2, 1) 0.72s forwards;
+  transform: translateX(0);
+  animation: ef-edge 1.15s cubic-bezier(0.3, 0, 0.2, 1) 1.45s forwards;
 }
 
 .ef-splash__rule {
@@ -263,6 +334,42 @@ html[data-windows-titlebar] .ef-splash__band { display: block; }
   transform: scaleX(0);
   animation: ef-rule 0.7s var(--efs-ease) 1.34s forwards;
 }
+
+/* The corners of the artwork's box.
+
+   The same 46px hazard-yellow brackets the conversation column uses, at the same 45% alpha,
+   so the splash and the app read as one instrument rather than two.
+
+   There is deliberately NO triangle drawn here. An earlier revision drew one, on the theory
+   that the artwork's own triangle outline needed help. It does not, and a second triangle
+   over the real one reads as a mistake. The artwork's triangle is a dark filled shape with a
+   lighter edge; what stopped it reading as a frame is that the 46px grid shows through the
+   artwork's transparent areas and cuts that edge into segments. The fix belongs on
+   `#ef-splash::before`, where the grid now fades out behind the artwork. */
+.ef-splash__frame {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(97vh, 60vw);
+  height: min(97vh, 60vw);
+  transform: translate(-50%, -52%);
+  opacity: 0;
+  pointer-events: none;
+  animation: ef-frame-in 0.7s var(--efs-ease) 1s forwards;
+}
+
+.ef-splash__corner {
+  position: absolute;
+  width: 46px;
+  height: 46px;
+  border: 1px solid var(--efs-y-45);
+  opacity: 0.5;
+}
+
+.ef-splash__corner--tl { top: 0; left: 0; border-right: 0; border-bottom: 0; }
+.ef-splash__corner--tr { top: 0; right: 0; border-left: 0; border-bottom: 0; }
+.ef-splash__corner--bl { bottom: 0; left: 0; border-right: 0; border-top: 0; }
+.ef-splash__corner--br { bottom: 0; right: 0; border-left: 0; border-top: 0; }
 
 .ef-splash__bar {
   display: flex;
@@ -294,6 +401,16 @@ html[data-windows-titlebar] .ef-splash__band { display: block; }
   animation: ef-fill 1.15s cubic-bezier(0.3, 0, 0.2, 1) 1.45s forwards;
 }
 
+/* The read-out. Driven from theme.js off the same clock animation the fill uses, so
+   the number and the bar can never disagree - see `tickProgress` there. Fixed-width
+   digits keep the label from twitching as it counts. */
+.ef-splash__pct {
+  min-width: 4ch;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: rgba(237, 240, 234, 0.82);
+}
+
 /* The English wordmark, small and dimmed, bottom right. */
 .ef-splash__tag {
   position: absolute;
@@ -318,8 +435,6 @@ html[data-windows-titlebar] .ef-splash__band { display: block; }
   animation: ef-tape-out 0.22s var(--efs-ease) forwards;
 }
 
-#ef-splash.is-done .ef-splash__scan { display: none; }
-
 @keyframes ef-splash-clock {
   to { opacity: 0; visibility: hidden; pointer-events: none; }
 }
@@ -339,35 +454,26 @@ html[data-windows-titlebar] .ef-splash__band { display: block; }
   to { transform: scaleX(0); }
 }
 
-@keyframes ef-scan {
-  from { top: -40vh; }
-  to { top: 118vh; }
-}
 
-@keyframes ef-mark-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-/* The wordmark reveal: a hard left→right wipe with the leading edge lit. */
+/* The reveal: a hard left→ight wipe with the leading edge lit. It carries the
+   artwork, text and all, so the text is written in by this and nothing else. */
 @keyframes ef-wipe {
   from { clip-path: inset(0 100% 0 0); }
   to { clip-path: inset(0 0 0 0); }
 }
 
 @keyframes ef-edge {
-  0% { opacity: 0; left: 0; }
+  0% { opacity: 0; transform: translateX(0); }
   8% { opacity: 1; }
   92% { opacity: 1; }
-  100% { opacity: 0; left: 100%; }
-}
-
-@keyframes ef-emblem-in {
-  from { opacity: 0; transform: translate(-50%, -52%) scale(1.1); }
-  to { opacity: 0.055; transform: translate(-50%, -52%) scale(1.04); }
+  100% { opacity: 0; transform: translateX(100%); }
 }
 
 @keyframes ef-line-in {
+@keyframes ef-frame-in {
+  to { opacity: 1; }
+}
+
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
 }

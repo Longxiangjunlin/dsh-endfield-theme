@@ -101,6 +101,706 @@ body,
   background-color: var(--ef-ink-1000);
 }
 
+/* Screen texture.
+
+   Static by design: one repeating gradient, painted once, no animation, so it costs nothing
+   per frame. It is the one layer that paints ABOVE the app - a scanline pattern the panels
+   cover up is wallpaper, not a screen - which is why it is a body child with a large z-index
+   rather than part of the backdrop. The value is a compromise between texture and legibility:
+   at 0.22 the lines darken their row by about a fifth, which is clearly visible on charcoal
+   without cutting into the text. The z-index sits just under the splash's 2147483000 so the
+   boot splash is never textured twice.
+
+   `pointer-events: none` is load-bearing: this element covers the entire viewport at all
+   times, so anything else would make the whole app unclickable. */
+#ef-crt {
+  position: fixed;
+  inset: 0;
+  z-index: 2147482000;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    180deg,
+    rgba(0, 0, 0, var(--ef-crt-alpha, 0.22)) 0 1px,
+    rgba(0, 0, 0, 0) 1px 3px
+  );
+}
+
+/* A little under half strength on the light theme: the same lines over a pale surface read
+   heavier than they do over charcoal. */
+body:not([data-ds-dark-theme]) #ef-crt {
+  background-image: repeating-linear-gradient(
+    180deg,
+    rgba(0, 0, 0, calc(var(--ef-crt-alpha, 0.22) * 0.6)) 0 1px,
+    rgba(0, 0, 0, 0) 1px 3px
+  );
+}
+
+html[data-ef-crt='off'] #ef-crt {
+  display: none;
+}
+
+/* --------------------------------------------------------------------------
+   Power reserve
+   --------------------------------------------------------------------------
+   The balance readout, drawn in the game's own terms. The theme already speaks
+   "FACTORY OS" and "field link", and the two warning clips are power-station
+   announcements, so the account balance is presented as a reserve that runs down: a
+   cell gauge with ticks, a figure, and a state word.
+
+   It is anchored to the SIDEBAR'S MEASURED EDGE, not laid out inside the sidebar's DOM, and
+   that is deliberate: `[data-slot="sidebar"]` is `display: contents`, so it is not a box at
+   all and a child appended to it takes part in the layout of whatever is above it. Appending
+   there put the readout off-screen. `--ef-col-left` is the conversation column's left edge,
+   which is the sidebar's right edge, and syncFrame() keeps it current - so the panel is placed
+   from a number that is already known to be right. */
+#ef-power {
+  /* border-box is load-bearing. Without it `width` is the CONTENT width, so 20px of padding
+     and 2px of border were added on top of the 260px the sidebar allows: measured at 282px
+     against a 280px sidebar, which parked the left edge at -12px, off the screen. */
+  box-sizing: border-box;
+  position: fixed;
+  /* `100%` rather than `100vw`: on a fixed element a percentage resolves against the initial
+     containing block, which excludes a scrollbar, while `vw` includes it. --ef-col-left comes
+     from getBoundingClientRect(), so it lives in the same coordinate space as the percentage. */
+  right: calc(100% - var(--ef-col-left, 270px) + 10px);
+  /* The sidebar's footer occupies the last ~56px (measured: 744..794 in an 800px window), so
+     the original 48px overlapped it by 8px. */
+  bottom: 62px;
+  width: calc(var(--ef-col-left, 270px) - 20px);
+  z-index: 1;
+  padding: 9px 10px 8px;
+  border: 1px solid var(--ef-y-20);
+  border-radius: 3px;
+  /* The same notched-corner geometry as the new-session button and the composer: the top-right
+     and bottom-left corners are cut, the other two keep their 3px radius. 10px rather than the
+     composer's 13px because this panel is a third of its height. Matching the shape is what
+     makes it read as one of the sidebar's controls rather than a box parked beside them. */
+  clip-path: polygon(
+    0 0,
+    calc(100% - 10px) 0,
+    100% 10px,
+    100% 100%,
+    10px 100%,
+    0 calc(100% - 10px)
+  );
+  background: linear-gradient(180deg, rgba(242, 240, 19, 0.05), rgba(242, 240, 19, 0.015));
+  /* Typography follows the SIDEBAR, not the theme's HUD voice: measured off the sidebar's own
+     rows (14px/20px, "Endfield Sans SC", 600 for a title, rgb(173,178,184) for secondary). The
+     earlier revision set this panel in the theme's monospace at 8-14px, which made it the one
+     thing in the sidebar that did not look like it belonged to the sidebar. */
+  font-family: var(--ef-sans);
+  color: #edf0ea;
+  /* The warning hues are deliberately NOT the theme's yellow: a reserve that is fine and a
+     reserve that is about to cut out have to be tellable apart at a glance, and one hue
+     cannot do that. */
+  --ef-power-nominal: var(--ef-y);
+  --ef-power-low: #ff9b21;
+  --ef-power-empty: #ff3b30;
+  --ef-power-accent: var(--ef-power-nominal);
+}
+
+/* Collapsed to a 55px rail there is no room for a gauge, and the rail already flags itself. */
+html[data-ef-rail='on'] #ef-power {
+  display: none;
+}
+
+html[data-ef-balance='off'] #ef-power {
+  display: none;
+}
+
+.ef-power__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.ef-power__head span {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  color: rgb(249, 250, 251);
+}
+
+.ef-power__head i {
+  font-style: normal;
+  font-size: 12px;
+  line-height: 18px;
+  letter-spacing: 0.12em;
+  color: rgb(173, 178, 184);
+}
+
+.ef-power__meter {
+  position: relative;
+  height: 9px;
+  border: 1px solid rgba(237, 240, 234, 0.16);
+  background: rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+
+.ef-power__fill {
+  position: absolute;
+  inset: 1px;
+  transform-origin: left center;
+  transform: scaleX(0);
+  background: var(--ef-power-accent);
+  /* One long transition: the poll is a minute apart, so the bar should slide rather than
+     jump, and the colour change that goes with a state change should arrive with it. */
+  transition: transform 0.7s cubic-bezier(0.3, 0, 0.2, 1), background-color 0.5s linear;
+}
+
+/* Ticks over the fill, so the gauge reads as a measured cell rather than a progress bar. */
+.ef-power__ticks {
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(
+    90deg,
+    rgba(5, 6, 6, 0.55) 0 1px,
+    rgba(5, 6, 6, 0) 1px 10%
+  );
+}
+
+.ef-power__foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 7px;
+}
+
+.ef-power__figure {
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 22px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ef-power-accent);
+  transition: color 0.5s linear;
+}
+
+.ef-power__caption {
+  font-style: normal;
+  font-size: 12px;
+  line-height: 18px;
+  letter-spacing: 0.1em;
+  color: rgb(173, 178, 184);
+}
+
+/* Today's change. Calm by default - spending is the normal state of an account, and colouring it
+   as an alarm would mean the alarm colour stopped meaning anything. A top-up is the unusual
+   event, so that is the one that gets the accent. */
+.ef-power__spend {
+  margin-top: 6px;
+  padding-top: 5px;
+  border-top: 1px solid rgba(237, 240, 234, 0.08);
+  font-size: 12px;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
+  color: rgb(173, 178, 184);
+}
+
+.ef-power__spend[hidden] {
+  display: none;
+}
+
+.ef-power__spend[data-sign='up'] {
+  color: var(--ef-y);
+}
+
+#ef-power[data-state='low'] {
+  --ef-power-accent: var(--ef-power-low);
+  border-color: rgba(255, 155, 33, 0.42);
+}
+
+#ef-power[data-state='empty'] {
+  --ef-power-accent: var(--ef-power-empty);
+  border-color: rgba(255, 59, 48, 0.5);
+  background: linear-gradient(180deg, rgba(255, 59, 48, 0.09), rgba(255, 59, 48, 0.02));
+}
+
+#ef-power[data-state='unknown'] {
+  --ef-power-accent: rgba(237, 240, 234, 0.28);
+}
+
+/* The alarm state breathes. Slow and shallow on purpose: this is a readout that has gone
+   critical, not a notification demanding a click. */
+#ef-power[data-state='empty'] .ef-power__meter {
+  animation: ef-power-alarm 1.9s ease-in-out infinite;
+}
+
+#ef-power[data-state='low'] .ef-power__meter {
+  animation: ef-power-alarm 2.6s ease-in-out infinite;
+}
+
+@keyframes ef-power-alarm {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 59, 48, 0);
+  }
+  50% {
+    box-shadow: 0 0 9px 0 var(--ef-power-accent);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   The theme's page inside DSH's settings dialog
+   --------------------------------------------------------------------------
+   Typography matches the dialog's own rows, MEASURED from the live settings rather than
+   chosen: label 14px/22px in the UI sans, hint 12px/18px, row height 44px. An earlier revision
+   set the whole page in the theme's monospace at 9-11px, which read as a different application
+   bolted into the settings rather than as another page of them.
+
+   `--ef-sans` resolves to the same stack the shell uses ("Endfield Sans SC" plus the platform
+   fallbacks), so this tracks the client instead of pinning a copy of its list.
+
+   The tab is given the shell's own nav-cell class in JS, so its size, padding and hover
+   behaviour come from the shell and only the accent is ours. The panel is a sibling of the
+   built-in sections, shown and hidden by the theme, because the shell does not know a tab it
+   did not render exists. */
+#ef-settings-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px 22px 28px;
+  font-family: var(--ef-sans);
+  font-size: 14px;
+  line-height: 22px;
+  color: #edf0ea;
+}
+
+#ef-settings-panel[hidden] {
+  display: none;
+}
+
+.ef-set__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--ef-y-20);
+}
+
+.ef-set__head b {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 22px;
+  color: rgb(249, 250, 251);
+}
+
+.ef-set__head i {
+  font-style: normal;
+  font-size: 12px;
+  line-height: 18px;
+  letter-spacing: 0.18em;
+  color: var(--ef-y-45);
+}
+
+.ef-set__list {
+  display: flex;
+  flex-direction: column;
+}
+
+.ef-set__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  /* The dialog's own rows measure 44px; matching that is what makes this page sit in the list
+     rather than beside it. */
+  min-height: 44px;
+  padding: 8px 2px;
+  border-bottom: 1px solid rgba(237, 240, 234, 0.06);
+  cursor: pointer;
+}
+
+.ef-set__text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.ef-set__text b {
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 22px;
+  color: rgb(249, 250, 251);
+}
+
+.ef-set__text i {
+  font-style: normal;
+  font-size: 12px;
+  line-height: 18px;
+  color: rgb(173, 178, 184);
+}
+
+/* Dependency structure.
+   A dependent setting is indented under the one that decides it and hangs off a hairline running
+   down from its master, so the grouping reads as structure rather than as a caption. The rail is
+   per-row and absolutely positioned, so consecutive children join into one line. */
+.ef-set__row[data-depth='1'],
+.ef-set__row[data-depth='2'],
+.ef-set__row[data-depth='3'] {
+  position: relative;
+}
+
+.ef-set__row[data-depth='1'] { padding-left: 20px; }
+.ef-set__row[data-depth='2'] { padding-left: 38px; }
+.ef-set__row[data-depth='3'] { padding-left: 56px; }
+
+.ef-set__row[data-depth='1']::before,
+.ef-set__row[data-depth='2']::before,
+.ef-set__row[data-depth='3']::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--ef-y-20);
+}
+
+.ef-set__row[data-depth='1']::before { left: 8px; }
+.ef-set__row[data-depth='2']::before { left: 26px; }
+.ef-set__row[data-depth='3']::before { left: 44px; }
+
+/* A setting whose master is off. Dimmed rather than hidden - switching a master on and off
+   should not make the page jump under the pointer - and its inputs are genuinely `disabled`
+   (set in JS), so a keyboard cannot reach a control that has no effect either. */
+.ef-set__row.is-gated {
+  opacity: 0.42;
+}
+
+.ef-set__row.is-gated .ef-set__text b {
+  color: rgb(173, 178, 184);
+}
+
+/* The two audition buttons, which is what the debug URL used to be for. */
+.ef-set__buttons {
+  display: flex;
+  gap: 8px;
+  flex: none;
+}
+
+.ef-set__button {
+  font-family: var(--ef-sans);
+  font-size: 13px;
+  line-height: 20px;
+  padding: 5px 12px;
+  color: var(--ef-y);
+  background: rgba(242, 240, 19, 0.06);
+  border: 1px solid var(--ef-y-20);
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background-color 0.16s linear, border-color 0.16s linear;
+}
+
+.ef-set__button:hover {
+  border-color: var(--ef-y-45);
+  background: rgba(242, 240, 19, 0.12);
+}
+
+.ef-set__button:active {
+  background: rgba(242, 240, 19, 0.2);
+}
+
+.ef-set__button:focus-visible {
+  outline: 1px solid var(--ef-y);
+  outline-offset: 2px;
+}
+
+body:not([data-ds-dark-theme]) .ef-set__row[data-depth='1']::before,
+body:not([data-ds-dark-theme]) .ef-set__row[data-depth='2']::before,
+body:not([data-ds-dark-theme]) .ef-set__row[data-depth='3']::before {
+  background: rgba(107, 106, 0, 0.3);
+}
+
+body:not([data-ds-dark-theme]) .ef-set__row.is-gated .ef-set__text b {
+  color: rgba(20, 24, 26, 0.5);
+}
+
+/* The switch is a real checkbox, restyled: a cell that fills with hazard yellow from the left,
+   so it reads as a gate opening rather than as a toggle sliding. */
+.ef-set__switch {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  flex: none;
+  width: 34px;
+  height: 16px;
+  margin: 0;
+  border: 1px solid var(--ef-y-20);
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+  transition: border-color 0.18s linear, background-color 0.18s linear;
+}
+
+.ef-set__switch::after {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  transform-origin: left center;
+  transform: scaleX(0);
+  background: var(--ef-y);
+  transition: transform 0.22s cubic-bezier(0.3, 0, 0.2, 1);
+}
+
+.ef-set__switch:checked {
+  border-color: var(--ef-y-45);
+  background: rgba(242, 240, 19, 0.08);
+}
+
+.ef-set__switch:checked::after {
+  transform: scaleX(1);
+}
+
+.ef-set__switch:focus-visible {
+  outline: 1px solid var(--ef-y);
+  outline-offset: 2px;
+}
+
+.ef-set__range,
+.ef-set__number {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.ef-set__range u,
+.ef-set__number u {
+  font-style: normal;
+  text-decoration: none;
+  min-width: 3.6em;
+  text-align: right;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--ef-y);
+  font-variant-numeric: tabular-nums;
+}
+
+.ef-set__range input[type='range'] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 130px;
+  height: 16px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.ef-set__range input[type='range']::-webkit-slider-runnable-track {
+  height: 4px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(237, 240, 234, 0.16);
+  border-radius: 0;
+}
+
+.ef-set__range input[type='range']::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 8px;
+  height: 16px;
+  margin-top: -7px;
+  border: none;
+  border-radius: 0;
+  background: var(--ef-y);
+}
+
+.ef-set__number input {
+  width: 78px;
+  padding: 4px 8px;
+  font-family: var(--ef-sans);
+  font-size: 14px;
+  line-height: 22px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ef-y);
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--ef-y-20);
+  border-radius: 3px;
+}
+
+.ef-set__number input:focus {
+  outline: none;
+  border-color: var(--ef-y-45);
+}
+
+.ef-set__note {
+  font-size: 12px;
+  line-height: 18px;
+  color: rgb(173, 178, 184);
+}
+
+/* The tab. Its box comes from the shell's nav-cell class (copied in JS); only the accent is
+   ours, and it is the same left rail the sidebar uses for its current row. */
+#ef-settings-tab {
+  position: relative;
+}
+
+#ef-settings-tab[data-ef-active] {
+  color: var(--ef-y);
+}
+
+#ef-settings-tab[data-ef-active]::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8%;
+  bottom: 8%;
+  width: 2px;
+  background: var(--ef-y);
+}
+
+.ef-set__tabLabel {
+  letter-spacing: 0.06em;
+}
+
+/* --------------------------------------------------------------------------
+   The dialog's OWN controls, in the theme's language
+   --------------------------------------------------------------------------
+   The theme's page should not be the only page in the settings that looks like the theme, so
+   the shell's controls inside any dialog are redrawn to match the ones above.
+
+   Selected by ROLE and by stable class suffixes, never by a full class name: the shell's names
+   are CSS-module hashes (`_switch_1ik0f_5`, `_3HsggG_selector`) and the hash changes between
+   builds, but `role="switch"` and the `_selector` suffix do not. Everything is scoped to
+   `[role="dialog"]` so nothing outside a dialog is touched.
+
+   The switch is a <button role="switch"> wrapping a round <span> thumb. The thumb is hidden and
+   the state is drawn on the button itself from `aria-checked`, which is both the semantic state
+   and a stable hook - so the result is the same square cell the theme's own page uses. */
+[role='dialog'] button[role='switch'] {
+  position: relative;
+  width: 34px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid var(--ef-y-20);
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.35);
+  transition: border-color 0.18s linear, background-color 0.18s linear;
+}
+
+[role='dialog'] button[role='switch'][aria-checked='true'] {
+  border-color: var(--ef-y-45);
+  background: rgba(242, 240, 19, 0.28);
+}
+
+[role='dialog'] button[role='switch'] > span {
+  display: none;
+}
+
+[role='dialog'] button[role='switch']:focus-visible {
+  outline: 1px solid var(--ef-y);
+  outline-offset: 2px;
+}
+
+/* Selector buttons ("工作区内修改", "中文", "详细", …): flat dark pills by default, given the same
+   hairline box as the theme's own inputs. */
+[role='dialog'] [class*='_selector'] {
+  background-color: rgba(0, 0, 0, 0.35) !important;
+  border: 1px solid var(--ef-y-20) !important;
+  border-radius: 3px !important;
+  color: rgb(249, 250, 251);
+  transition: border-color 0.16s linear;
+}
+
+[role='dialog'] [class*='_selector']:hover {
+  border-color: var(--ef-y-45) !important;
+}
+
+[role='dialog'] input[type='number'],
+[role='dialog'] input[type='text'] {
+  background-color: rgba(0, 0, 0, 0.35) !important;
+  border: 1px solid var(--ef-y-20) !important;
+  border-radius: 3px !important;
+  color: rgb(249, 250, 251);
+  font-family: var(--ef-sans);
+  font-variant-numeric: tabular-nums;
+}
+
+[role='dialog'] input[type='number']:focus,
+[role='dialog'] input[type='text']:focus {
+  outline: none;
+  border-color: var(--ef-y-45) !important;
+}
+
+body:not([data-ds-dark-theme]) [role='dialog'] button[role='switch'] {
+  border-color: rgba(107, 106, 0, 0.4);
+  background: rgba(20, 24, 26, 0.08);
+}
+
+body:not([data-ds-dark-theme]) [role='dialog'] button[role='switch'][aria-checked='true'] {
+  background: rgba(107, 106, 0, 0.4);
+}
+
+body:not([data-ds-dark-theme]) [role='dialog'] [class*='_selector'],
+body:not([data-ds-dark-theme]) [role='dialog'] input[type='number'],
+body:not([data-ds-dark-theme]) [role='dialog'] input[type='text'] {
+  background-color: rgba(255, 255, 255, 0.72) !important;
+  border-color: rgba(107, 106, 0, 0.34) !important;
+  color: rgb(20, 24, 26);
+}
+
+body:not([data-ds-dark-theme]) #ef-settings-panel {
+  color: #14181a;
+}
+
+body:not([data-ds-dark-theme]) .ef-set__text b {
+  color: rgba(20, 24, 26, 0.86);
+}
+
+body:not([data-ds-dark-theme]) .ef-set__text i,
+body:not([data-ds-dark-theme]) .ef-set__note {
+  color: rgba(20, 24, 26, 0.42);
+}
+
+body:not([data-ds-dark-theme]) .ef-set__row {
+  border-bottom-color: rgba(20, 24, 26, 0.08);
+}
+
+/* Turn index down the left of the transcript.
+
+   Every flow item in the chat already carries `data-chat-turn`, so the number comes from
+   `attr()` — no script walks the transcript, and nothing needs keeping in sync while it
+   streams.
+
+   The index is INSIDE the item, via a padding-left, not parked in a negative offset. A probe
+   against the real container showed the items sit flush with the column edge (left edge at
+   280px with a 277px sidebar), so a negative offset puts the number in the sidebar. Making the
+   room instead means the marker can never leave the column at any window size.
+
+   Scoped to items that are not `turn-process`: those are nested inside other items, and an
+   indent on both would stack. */
+[class*='flowItem'][data-chat-turn]:not([data-chat-flow-kind='turn-process']) {
+  position: relative;
+  padding-left: 20px;
+}
+
+[class*='flowItem'][data-chat-turn]:not([data-chat-flow-kind='turn-process'])::before {
+  content: attr(data-chat-turn);
+  position: absolute;
+  top: 2px;
+  left: 0;
+  width: 13px;
+  text-align: right;
+  font-family: var(--ef-mono);
+  font-size: 9px;
+  line-height: 1.4;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ef-y-20);
+  pointer-events: none;
+}
+
+/* Turned off in settings: drop the marker AND the room it reserved, so the transcript goes
+   back to its original indent rather than keeping a gap for a number that is not there. */
+html[data-ef-rail='off'] [class*='flowItem'][data-chat-turn]:not([data-chat-flow-kind='turn-process']) {
+  padding-left: 0;
+}
+
+html[data-ef-rail='off'] [class*='flowItem'][data-chat-turn]:not([data-chat-flow-kind='turn-process'])::before {
+  content: none;
+}
+
 #ef-backdrop .ef-art {
   position: absolute;
   inset: 0;
@@ -829,9 +1529,39 @@ pre,
   font-family: var(--ef-mono) !important;
 }
 
-/* Scrollbars: a yellow hairline, no track. */
+/* Scrollbars: a yellow hairline, no track — and a square, thin one.
+   `scrollbar-color` alone only sets the COLOUR; the shape stayed Chromium's default, which
+   is wide and rounded and the one piece of chrome in the app that never matched the rest.
+   `scrollbar-width` covers the standard side, the webkit pseudos the shape. Both are needed
+   in Chromium, which honours `scrollbar-color` but takes width and rounding from the pseudos. */
 * {
   scrollbar-color: var(--dsh-scrollbar-thumb) transparent;
+  scrollbar-width: thin;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--dsh-scrollbar-thumb);
+  border: 2px solid transparent;
+  background-clip: content-box;
+  border-radius: 0;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--dsh-scrollbar-thumb-hover);
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 /* Right dock / details column. */

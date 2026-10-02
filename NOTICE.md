@@ -45,9 +45,12 @@ files.
 | --- | --- |
 | `client/assets/endfield-lockup-light-bg.png` | 完整 lockup（冠部 + `终末地 / ENDFIELD INDUSTRIES` + 倒三角），**浅色侧栏用**（黑白对调） |
 | `client/assets/endfield-lockup-dark-bg.png` | 同一 lockup，**深色侧栏用**（原样） |
-| `client/assets/endfield-mark-zh.png` | `终末地 / ENDFIELD INDUSTRIES` 字标（白） |
-| `client/assets/endfield-mark-en.png` | `ENDFIELD INDUSTRIES` 字标（白） |
-| `client/assets/endfield-emblem-full.png` | 徽记去掉两行字标后的冠部与倒三角（开屏底纹；保留字标会与擦写动画叠出鬼影） |
+| `client/assets/endfield-mark-zh.png` | `终末地 / ENDFIELD INDUSTRIES` 字标（白）。**开屏已不用它**——底纹现在就是原始徽记本身，字在图里；这份单独的字标保留备用 |
+| `client/assets/endfield-mark-en.png` | `ENDFIELD INDUSTRIES` 字标（白），开屏右下角那枚小字标 |
+| `client/assets/endfield-emblem.webp` | **原始徽记整张图，除文字外做了颜色对调**（冠部 + `终末地` + `ENDFIELD INDUSTRIES` + 倒三角及其外框线），开屏底纹。理由：原图是**黑墨 + 白挖空**、为白底设计 ✓，放在炭黑底上时它的黑形状（顶部横杠、外圈三角框线、填充的冠部与三角）与背景只差 5/255，等于消失了 ✓；对调后墨色变白、挖空处成为暗底，就是在暗底上看到同一张图 ✓。**文字必须排除**——它本来就是白的，一起对调就没了 ✓。做法：整图 RGB 取反，但文字所在行（395–575、595–617）里的**亮像素保持原样**（那两行里只有文字是亮的，所以选择精确）✓。1192×1026 原生分辨率，导出为 WebP q92（86 KB；本地工具链写不了 AVIF） |
+| `client/assets/endfield-boot.mp3` | 开屏音效：游戏内「集成工业系统语音 · 集成核心区域欢迎进入」的提取音频，142 KB / 192 kbps / 约 5.9 s，播到约 2.9 s 时淡出。**与美术素材同源，同样不在 MIT 范围内** |
+| `client/assets/endfield-low-power.mp3` | 余额预警音：游戏内「集成工业系统语音 · 集成核心区域电力输出不足」的提取音频，149 KB，余额低于阈值时播一次（边沿触发）。**同上，不在 MIT 范围内** |
+| `client/assets/endfield-no-power.mp3` | 余额耗尽音：游戏内「集成工业系统语音 · 集成核心区域电力储备耗尽」的提取音频，154 KB，余额 ≤ 0 时播一次。**同上，不在 MIT 范围内** |
 | `client/assets/endfield-icon.svg` | 站点图标（由徽记冠部矢量化重绘） |
 
 ### 1.2 对话区背景 / Conversation backdrop

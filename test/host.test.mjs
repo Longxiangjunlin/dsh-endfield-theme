@@ -52,10 +52,15 @@ assert.equal(table[1].kind, 'html')
 assert.equal(table[1].placement, 'body')
 assert.match(table[1].html, /<style data-dsh-endfield-splash>/)
 assert.match(table[1].html, /id="ef-splash"/)
-assert.match(table[1].html, /ef-splash__mark/)
+// The wordmark is no longer a layer of its own: the artwork carries its own text and is
+// what the wipe reveals, so the sheet must reference the artwork and must not still be
+// drawing a separate mark on top of it.
+assert.match(table[1].html, /ef-splash__emblem/)
+assert.match(table[1].html, /url\(\/dsh-endfield\/assets\/endfield-emblem\.webp\)/)
+assert.doesNotMatch(table[1].html, /ef-splash__mark/)
+assert.match(table[1].html, /ef-splash__pct/)
 assert.match(table[1].html, /animation-delay:1\.14s/)
 assert.match(table[1].html, /终末地工业/)
-assert.match(table[1].html, /url\(\/dsh-endfield\/assets\/endfield-mark-zh\.png\)/)
 assert.match(table[1].html, /ef-splash__band/, 'title-bar band element')
 // The caption strip is handed a TRANSPARENT fill, never a charcoal one: the
 // overlay paints above the page, so a flat colour can only ever be a rectangle
@@ -156,7 +161,11 @@ const jsText = js.body.toString('utf8')
 assert.match(jsText, /__dshEndfieldTheme/)
 assert.match(jsText, /decorateBrand/)
 assert.match(jsText, /终末地工业/)
-assert.match(jsText, /dsh-endfield-brand/)
+// The opt-out switches moved behind the settings store: the URL parameter is now assembled
+// from a prefix and a setting name, so assert the mechanism rather than one literal spelling.
+assert.match(jsText, /dsh-endfield-theme\.settings/, 'settings store key')
+assert.match(jsText, /'dsh-endfield-'\s*\+\s*name/, 'URL override prefix')
+assert.match(jsText, /function setting\(/)
 
 const art = call('/dsh-endfield/assets/endfield-field.jpg')
 assert.equal(art.status, 200)
@@ -176,9 +185,13 @@ const named = new Set()
 for (const file of ['splash.css', 'splash.html', 'theme.css', 'theme.js']) {
   if (!existsSync(join(clientDir, file))) continue
   const source = readFileSync(join(clientDir, file), 'utf8')
-  // Require a real extension: the client also writes the route shape as a
-  // placeholder in comments, which is not a reference to anything.
-  for (const match of source.matchAll(/\/dsh-endfield\/assets\/([\w.\-/]+\.(?:png|jpe?g|webp|avif|gif|svg|woff2?))/g)) {
+  // Two spellings, because the client uses both: `url(/dsh-endfield/assets/x)` in
+  // CSS, and `ROOT + '/assets/x'` in JS. Matching only the first left the boot audio
+  // outside the guard entirely - a deleted mp3 would have been a silent 404.
+  //
+  // A real extension is still required: the client also writes the route shape as a
+  // placeholder inside comments, which is not a reference to anything.
+  for (const match of source.matchAll(/(?:\/dsh-endfield)?\/assets\/([\w.\-/]+\.(?:png|jpe?g|webp|avif|gif|svg|mp3|woff2?))/g)) {
     named.add(match[1])
   }
 }
@@ -189,6 +202,22 @@ for (const asset of named) {
     `${asset} is referenced by the client but missing from client/assets/`,
   )
   assert.equal(call(`/dsh-endfield/assets/${asset}`).status, 200, `${asset} is referenced but not served`)
+}
+
+// A served file is not the same as a correctly typed one. The boot audio went out as
+// application/octet-stream because `.mp3` was missing from the host's content-type
+// map: it still decoded, so nothing failed, but the type was wrong and no check said so.
+for (const [asset, type] of [
+  ['endfield-boot.mp3', 'audio/mpeg'],
+  ['endfield-emblem.webp', 'image/webp'],
+  ['endfield-mark-zh.png', 'image/png'],
+  ['endfield-field.jpg', 'image/jpeg'],
+]) {
+  assert.equal(
+    call(`/dsh-endfield/assets/${asset}`).headers['content-type'],
+    type,
+    `${asset} is served with the wrong content type`,
+  )
 }
 
 // The splash sheet and markup are served too: theme.js falls back to fetching

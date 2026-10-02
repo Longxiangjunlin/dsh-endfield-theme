@@ -20,9 +20,19 @@
   /** How long after that the node is dropped (the CRT collapse duration). */
   var SPLASH_FADE_MS = 700
   var CSS_WAIT_MS = 400
+  /**
+   * The BOOT bar's read-out window, in milliseconds into the splash timeline. These
+   * mirror `ef-fill` in splash.css (`animation: ef-fill 1.15s ... 1.45s`); the fill
+   * itself stays CSS, and the number is computed from the same clock animation so the
+   * two cannot drift apart. Change them together.
+   */
+  var SPLASH_FILL_AT_MS = 1450
+  var SPLASH_FILL_MS = 1150
+  /** Boot sting. Missing or refused is fine - the animation does not depend on it. */
+  var SPLASH_AUDIO = ROOT + '/assets/endfield-boot.mp3'
 
   if (window.__dshEndfieldTheme) return
-  window.__dshEndfieldTheme = { version: '1.0.0' }
+  window.__dshEndfieldTheme = { version: '1.1.0' }
 
   var doc = document
   var html = doc.documentElement
@@ -76,18 +86,55 @@
     return layer
   }
 
+  /**
+   * The screen texture. One element, one repeating gradient, never animated — and the only
+   * layer that paints ABOVE the app rather than behind it: a scanline pattern the panels cover
+   * up is wallpaper, not a screen. Kept faint enough that body text stays crisp.
+   */
+  var crtElement = null
+
+  function crtEnabled() {
+    try {
+      var query = new URLSearchParams(window.location.search)
+      if (query.get('dsh-endfield-crt') === '0') return false
+    } catch (err) {
+      /* an unparsable query string is not a reason to skip it */
+    }
+    return true
+  }
+
+  function ensureCrt() {
+    if (!crtEnabled()) return
+    var body = doc.body
+    if (body === null) return
+    if (crtElement !== null && crtElement.parentNode === body) return
+    var existing = doc.getElementById('ef-crt')
+    if (existing !== null) {
+      crtElement = existing
+      if (existing.parentNode !== body) body.appendChild(existing)
+      return
+    }
+    crtElement = doc.createElement('div')
+    crtElement.id = 'ef-crt'
+    crtElement.setAttribute('aria-hidden', 'true')
+    body.appendChild(crtElement)
+  }
+
   function ensureBackdrop() {
     var body = doc.body
     if (body === null) return
     var existing = doc.getElementById('ef-backdrop')
     if (existing !== null) {
       if (existing.parentNode !== body) body.appendChild(existing)
-      return
+    } else {
+      // Appended LAST, not first: the layer is `position: fixed; z-index: -1`, so
+      // document order does not decide what it paints behind, but being the first
+      // child of <body> would hand it to anything keyed on `body > :first-child`.
+      body.appendChild(buildBackdrop())
     }
-    // Appended LAST, not first: the layer is `position: fixed; z-index: -1`, so
-    // document order does not decide what it paints behind, but being the first
-    // child of <body> would hand it to anything keyed on `body > :first-child`.
-    body.appendChild(buildBackdrop())
+    ensureCrt()
+    applySettings()
+    ensureBalance()
   }
 
   /**
@@ -154,6 +201,902 @@
     frameElement.classList.add('is-placed')
   }
 
+  /* --------------------------------------------------------------- settings */
+
+  /**
+   * User settings, kept in localStorage.
+   *
+   * Stored as one JSON blob under one key, and read once at load. Every accessor below goes
+   * through `setting()`, so a URL parameter and a stored value can never disagree about which
+   * one wins: the URL wins, always, because it is the one you can put in a bug report.
+   *
+   * Nothing here reads a remote config or writes anywhere but localStorage.
+   */
+  var SETTINGS_KEY = 'dsh-endfield-theme.settings'
+
+  var DEFAULTS = {
+    splash: true,
+    bootAudio: true,
+    brand: true,
+    crt: true,
+    crtStrength: 22,
+    turnRail: true,
+    conversation: true,
+    balance: true,
+    warnAt: 5,
+    warnVoice: true,
+    warnVolume: 90,
+    pollSeconds: 60,
+    gaugeSpan: 4,
+  }
+
+  var stored = null
+  try {
+    var raw = window.localStorage.getItem(SETTINGS_KEY)
+    stored = raw === null ? null : JSON.parse(raw)
+  } catch (err) {
+    /* private mode, a quota, or a corrupted value: defaults are always usable */
+  }
+
+  function setting(name) {
+    var fromUrl = null
+    try {
+      var query = new URLSearchParams(window.location.search)
+      var flag = query.get('dsh-endfield-' + name)
+      if (flag !== null) fromUrl = flag
+    } catch (err) {
+      /* an unparsable query string leaves the stored value in charge */
+    }
+    var fallback = DEFAULTS[name]
+    var value = stored !== null && typeof stored === 'object' && name in stored ? stored[name] : fallback
+    if (fromUrl !== null) {
+      if (typeof fallback === 'boolean') value = fromUrl !== '0'
+      else if (typeof fallback === 'number') {
+        var parsed = Number(fromUrl)
+        if (isFinite(parsed)) value = parsed
+      }
+    }
+    return value
+  }
+
+  function saveSettings(next) {
+    stored = next
+    try {
+      window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(next))
+    } catch (err) {
+      /* the session still honours the change; it just will not outlive the page */
+    }
+  }
+
+  /** Publish the settings the stylesheet needs as attributes and custom properties. */
+  function applySettings() {
+    var flags = {
+      'data-ef-crt': setting('crt'),
+      'data-ef-rail': setting('turnRail'),
+      'data-ef-balance': setting('balance'),
+    }
+    for (var attr in flags) {
+      if (flags[attr]) html.removeAttribute(attr)
+      else html.setAttribute(attr, 'off')
+    }
+    var strength = Number(setting('crtStrength'))
+    if (!isFinite(strength)) strength = DEFAULTS.crtStrength
+    strength = Math.min(60, Math.max(0, strength))
+    html.style.setProperty('--ef-crt-alpha', String(strength / 100))
+    // Every control's change handler ends up here, so this is the one place that has to keep the
+    // dependency greying in step with the values. A no-op until the panel exists.
+    syncSettingGates()
+  }
+
+  /* ---------------------------------------------------------------- balance */
+
+  /**
+   * The balance readout in the sidebar, drawn as a power reserve.
+   *
+   * The theme already talks about the account in the game's own terms - the boot log runs
+   * "FACTORY OS", the splash measures a field link - and the two warning clips the user
+   * supplied are power-station announcements. A balance is the one number in this UI that maps
+   * onto that cleanly: it is a reserve that runs down, warns, and eventually cuts out. So it is
+   * drawn as a cell gauge with a reserve figure, not as a currency widget.
+   *
+   * The value comes from `/dsh-endfield/balance`, which is the host half asking the host's own
+   * account service. Nothing here knows about wallets or credentials; it reads the fields it
+   * recognises out of whatever that service returns, and stays quiet when it recognises none.
+   */
+  var balanceElement = null
+  var balanceTimer = null
+  var balanceValue = null
+  var balanceReason = 'pending'
+  /** Which warning has already been sounded for the current excursion. */
+  var warnedLevel = null
+
+  /**
+   * A spendable amount out of one list of wallets.
+   *
+   * CNY wins when present: this is a Chinese-language client, and a multi-currency list would
+   * otherwise report whichever currency happened to come first.
+   */
+  function walletListAmount(list) {
+    if (!Array.isArray(list) || list.length === 0) return null
+    var preferred = null
+    for (var j = 0; j < list.length; j++) {
+      var wallet = list[j]
+      if (wallet === null || typeof wallet !== 'object') continue
+      var amount = null
+      var currency = null
+      for (var key in wallet) {
+        if (amount === null && /^(balance|amount|total)$/i.test(key)) amount = Number(wallet[key])
+        if (currency === null && /^currency$/i.test(key)) currency = String(wallet[key])
+      }
+      if (amount === null || !isFinite(amount)) continue
+      if (currency !== null && /^cny$/i.test(currency)) return amount
+      if (preferred === null) preferred = amount
+    }
+    return preferred
+  }
+
+  /**
+   * Pull a spendable amount out of the account service's projection.
+   *
+   * The real payload, read off a live host rather than assumed, is:
+   *
+   *   { status: "ready",
+   *     value:        [ { currency: "CNY", balance: "17.2213610400000000" } ],
+   *     bonusWallets: [ { currency: "CNY", balance: "0" } ] }
+   *
+   * so the spendable list is `value` — a BARE array, not an object keyed by wallet name, which
+   * is what the first revision of this function looked for. That is why the readout sat at NO
+   * SIGNAL with a perfectly good balance one key away. The other spellings are kept because
+   * they cost nothing and a projection that grows a name should not kill the readout.
+   *
+   * `bonusWallets` is never consulted: the service documents granted bonus as separate from
+   * recharge balance, so counting it would overstate what is actually left to spend.
+   */
+  /**
+   * Today's change in the balance, derived from the polls.
+   *
+   * The account service reports a balance and nothing else, so the only way to say "spent
+   * today" is to remember where the day started and subtract. Two things reset the baseline: a
+   * new calendar day, and a balance that went UP - a top-up is not negative spending, and
+   * carrying yesterday's baseline through one would report a nonsense figure.
+   *
+   * Kept in localStorage so a reload does not restart the measurement at the wrong number.
+   */
+  var SPEND_KEY = 'dsh-endfield-theme.spend'
+  var spendBaseline = null
+
+  function dayKey() {
+    var now = new Date()
+    return now.getFullYear() + '-' + (now.getMonth() + 1) + '-' + now.getDate()
+  }
+
+  function noteSpend(amount) {
+    if (!isFinite(amount)) return
+    var day = dayKey()
+    var stored = null
+    try {
+      stored = JSON.parse(window.localStorage.getItem(SPEND_KEY) || 'null')
+    } catch (err) {
+      stored = null
+    }
+    var usable = stored !== null && typeof stored === 'object' &&
+      stored.day === day && isFinite(stored.start)
+    if (!usable || amount > stored.start) {
+      stored = { day: day, start: amount }
+      try {
+        window.localStorage.setItem(SPEND_KEY, JSON.stringify(stored))
+      } catch (err) {
+        /* the session still tracks it, it just will not survive a reload */
+      }
+    }
+    spendBaseline = stored
+  }
+
+  function drawSpend() {
+    var el = balanceElement === null ? null : balanceElement.querySelector('.ef-power__spend')
+    if (el === null) return
+    if (spendBaseline === null || !isFinite(spendBaseline.start) || balanceValue === null) {
+      el.textContent = ''
+      el.hidden = true
+      return
+    }
+    var delta = balanceValue - spendBaseline.start
+    el.hidden = false
+    if (Math.abs(delta) < 0.005) {
+      el.textContent = '今日 无变化'
+      el.setAttribute('data-sign', 'flat')
+      return
+    }
+    var spent = -delta
+    el.textContent = '今日 ' + (spent > 0 ? '−' : '+') + '¥' + Math.abs(spent).toFixed(2)
+    el.setAttribute('data-sign', spent > 0 ? 'down' : 'up')
+  }
+
+  function walletAmount(value) {
+    if (value === null || typeof value !== 'object') return null
+    if (Array.isArray(value)) return walletListAmount(value)
+    for (var key in value) {
+      if (/^(normal[_-]?)?wallets?$/i.test(key) || /^value$/i.test(key)) {
+        var found = walletListAmount(value[key])
+        if (found !== null) return found
+      }
+    }
+    return null
+  }
+
+  function amountFromPayload(payload) {
+    if (payload === null || typeof payload !== 'object' || payload.ok !== true) return null
+    var value = payload.balance
+    var direct = walletAmount(value)
+    if (direct !== null) return direct
+    // Some projections nest the wallets one level down, under a summary or data key.
+    if (value !== null && typeof value === 'object') {
+      for (var key in value) {
+        var nested = walletAmount(value[key])
+        if (nested !== null) return nested
+      }
+    }
+    return null
+  }
+
+  /**
+   * Sound a warning once per excursion.
+   *
+   * Edge-triggered on purpose: the poll runs every minute, and a level-triggered warning would
+   * say "power output insufficient" every minute for as long as the balance stayed low. The
+   * level resets when the balance recovers, so the next dip is announced again.
+   */
+  function checkWarning(amount) {
+    var threshold = Number(setting('warnAt'))
+    if (!isFinite(threshold) || threshold < 0) threshold = DEFAULTS.warnAt
+    var level = null
+    if (amount <= 0) level = 'empty'
+    else if (amount < threshold) level = 'low'
+    if (level === null) {
+      warnedLevel = null
+      return
+    }
+    if (warnedLevel === level || !setting('warnVoice')) return
+    warnedLevel = level
+    try {
+      var clip = new window.Audio(
+        ROOT + (level === 'empty' ? '/assets/endfield-no-power.mp3' : '/assets/endfield-low-power.mp3'),
+      )
+      var volume = Number(setting('warnVolume'))
+      clip.volume = isFinite(volume) ? Math.min(1, Math.max(0, volume / 100)) : 0.9
+      var started = clip.play()
+      if (started !== undefined && started !== null && typeof started.catch === 'function') {
+        started.catch(function () {
+          /* refused without a gesture; the gauge still shows the state */
+        })
+      }
+    } catch (err) {
+      /* no audio available is not a reason to skip the readout */
+    }
+  }
+
+  function drawBalance() {
+    if (balanceElement === null) return
+    var amount = balanceValue
+    var threshold = Number(setting('warnAt'))
+    if (!isFinite(threshold) || threshold < 0) threshold = DEFAULTS.warnAt
+
+    var fill = balanceElement.querySelector('.ef-power__fill')
+    var figure = balanceElement.querySelector('.ef-power__figure')
+    var caption = balanceElement.querySelector('.ef-power__caption')
+
+    if (amount === null) {
+      balanceElement.setAttribute('data-state', 'unknown')
+      if (figure !== null) figure.textContent = balanceReason === 'signed-out' ? '未登录' : '——'
+      if (caption !== null) caption.textContent = balanceReason === 'signed-out' ? 'NO ACCOUNT' : 'NO SIGNAL'
+      if (fill !== null) fill.style.transform = 'scaleX(0)'
+      return
+    }
+
+    // Full scale is a multiple of the warning threshold (four by default), so the warning point
+    // sits at a fixed fraction of the gauge - visibly "low" long before it is reached, which is
+    // the whole point of a gauge. The multiplier is a setting because what counts as "plenty of
+    // reserve" is different for someone topping up ¥10 and someone topping up ¥500.
+    var span = Number(setting('gaugeSpan'))
+    if (!isFinite(span) || span < 1) span = DEFAULTS.gaugeSpan
+    var full = threshold > 0 ? threshold * span : Math.max(1, amount)
+    var ratio = Math.max(0, Math.min(1, amount / full))
+    var state = amount <= 0 ? 'empty' : amount < threshold ? 'low' : 'nominal'
+    balanceElement.setAttribute('data-state', state)
+    if (fill !== null) fill.style.transform = 'scaleX(' + ratio.toFixed(4) + ')'
+    if (figure !== null) figure.textContent = '¥' + amount.toFixed(2)
+    if (caption !== null) {
+      caption.textContent = state === 'empty' ? 'DEPLETED' : state === 'low' ? 'OUTPUT LOW' : 'NOMINAL'
+    }
+    noteSpend(amount)
+    drawSpend()
+    checkWarning(amount)
+  }
+
+  /**
+   * A forced balance, for testing the warnings without waiting for a real one.
+   *
+   * `?dsh-endfield-fakeBalance=0` makes the readout believe the account is empty, so the
+   * "reserve depleted" clip can be auditioned on an account that is nowhere near empty. It is
+   * read on every poll rather than once, so changing the URL and reloading is all it takes.
+   *
+   * Returns null when the override is absent or unparsable, which is the normal case: a
+   * malformed value must never be mistaken for a real zero.
+   */
+  function fakeBalance() {
+    try {
+      var query = new URLSearchParams(window.location.search)
+      var raw = query.get('dsh-endfield-fakeBalance')
+      if (raw === null) return null
+      var value = Number(raw)
+      return isFinite(value) ? value : null
+    } catch (err) {
+      return null
+    }
+  }
+
+  function refreshBalance() {
+    if (!setting('balance')) return
+    var forced = fakeBalance()
+    if (forced !== null) {
+      balanceValue = forced
+      balanceReason = 'ok'
+      drawBalance()
+      return
+    }
+    var request
+    try {
+      request = window.fetch(ROOT + '/balance', { credentials: 'same-origin' })
+    } catch (err) {
+      return
+    }
+    request
+      .then(function (response) {
+        return response.ok ? response.json() : null
+      })
+      .then(function (payload) {
+        balanceValue = amountFromPayload(payload)
+        balanceReason = balanceValue === null && payload !== null && typeof payload.reason === 'string'
+          ? payload.reason
+          : balanceValue === null ? 'unknown' : 'ok'
+        drawBalance()
+      })
+      .catch(function () {
+        balanceReason = 'error'
+        drawBalance()
+      })
+  }
+
+  function ensureBalance() {
+    var body = doc.body
+    if (body === null) return
+    if (!setting('balance')) {
+      if (balanceElement !== null && balanceElement.parentNode !== null) {
+        balanceElement.parentNode.removeChild(balanceElement)
+      }
+      return
+    }
+    if (balanceElement !== null && balanceElement.parentNode !== null) return
+    var sidebar = doc.querySelector('[data-slot="sidebar"]')
+    if (sidebar === null) return
+    balanceElement = doc.createElement('div')
+    balanceElement.id = 'ef-power'
+    balanceElement.innerHTML =
+      '<div class="ef-power__head"><span>电力储备</span><i>POWER RESERVE</i></div>' +
+      '<div class="ef-power__meter"><u class="ef-power__fill"></u>' +
+      '<b class="ef-power__ticks"></b></div>' +
+      '<div class="ef-power__foot"><b class="ef-power__figure">——</b>' +
+      '<i class="ef-power__caption">NO SIGNAL</i></div>' +
+      '<div class="ef-power__spend" hidden></div>'
+    sidebar.appendChild(balanceElement)
+    drawBalance()
+    refreshBalance()
+    startBalanceTimer()
+  }
+
+  /**
+   * (Re)start the poll. The interval is a setting, so the handler that changes it calls this
+   * again rather than leaving the old timer in place - two timers would double the request rate
+   * and neither would be the one the user asked for.
+   */
+  function startBalanceTimer() {
+    if (balanceTimer !== null) {
+      window.clearInterval(balanceTimer)
+      balanceTimer = null
+    }
+    var seconds = Number(setting('pollSeconds'))
+    if (!isFinite(seconds) || seconds < 15) seconds = DEFAULTS.pollSeconds
+    balanceTimer = window.setInterval(refreshBalance, Math.round(seconds) * 1000)
+  }
+
+  /* ---------------------------------------------------------------- balance end */
+
+  /* ------------------------------------------------------------ settings panel */
+
+  /**
+   * The theme's own page inside DSH's settings dialog.
+   *
+   * The plugin is host-only (its cordis patch has no dsh.client facet), so it cannot register a
+   * settings page the way a client plugin does. It can, however, put one where the user asked
+   * for it - inside the settings - by extending the dialog's own DOM.
+   *
+   * Two anchors, both taken from the live dialog rather than guessed:
+   *
+   *   nav button                       the tab strip; the new tab goes after the last one
+   *   [data-slot="settings.section"]   the content area; the parent of that slot is where the
+   *                                    built-in sections live, so the panel is a sibling
+   *
+   * `data-slot` is a stable attribute the shell sets on purpose, which is why it is used
+   * instead of any of the hashed CSS-module class names around it. The tab strip has no such
+   * attribute, so it is found structurally.
+   *
+   * Switching is ours to handle: the shell knows nothing about a tab it did not render, so
+   * clicking ours hides its content and clicking any of its tabs hides ours.
+   */
+  var SETTINGS_TAB_ID = 'ef-settings-tab'
+  var SETTINGS_PANEL_ID = 'ef-settings-panel'
+
+  function findSettingsParts() {
+    var dialog = doc.querySelector('[role="dialog"]')
+    if (dialog === null) return null
+    var nav = dialog.querySelector('nav')
+    var anchor = dialog.querySelector('[data-slot="settings.section"]')
+    if (nav === null || anchor === null) return null
+    var buttons = nav.querySelectorAll('button')
+    if (buttons.length === 0) return null
+    if (anchor.parentNode === null) return null
+    // `anchor.parentNode` is the element that actually scrolls (measured: overflow-y auto, and
+    // it is the only scrollable node between the panel and the dialog). The panel goes INSIDE
+    // it and the section is hidden on its own, so the page scrolls with the dialog instead of
+    // hanging below the fold with nothing to scroll it.
+    return {
+      nav: nav,
+      lastTab: buttons[buttons.length - 1],
+      options: anchor.parentNode,
+      section: anchor,
+    }
+  }
+
+  /**
+   * One settings row.
+   *
+   * A `<label>` only when the control is a checkbox. Wrapping a range or a number in a label
+   * makes the label forward clicks to the control, which turns a drag into a jump and leaves
+   * the part of the row beside the control doing nothing - so the sliders felt broken. A
+   * checkbox is the one control where click-anywhere-to-toggle is what you want.
+   *
+   * The row carries its setting name and its depth in the dependency tree; the stylesheet
+   * indents by depth and `syncSettingGates` uses the name.
+   */
+  function settingsRow(name, label, hint, control) {
+    var clickToToggle = control.tagName === 'INPUT' && control.type === 'checkbox'
+    var row = doc.createElement(clickToToggle ? 'label' : 'div')
+    row.className = 'ef-set__row'
+    row.setAttribute('data-ef-setting', name)
+    row.setAttribute('data-depth', String(settingDepth(name)))
+    var text = doc.createElement('span')
+    text.className = 'ef-set__text'
+    var name = doc.createElement('b')
+    name.textContent = label
+    text.appendChild(name)
+    if (hint) {
+      var note = doc.createElement('i')
+      note.textContent = hint
+      text.appendChild(note)
+    }
+    row.appendChild(text)
+    row.appendChild(control)
+    return row
+  }
+
+  function toggleControl(name) {
+    var input = doc.createElement('input')
+    input.type = 'checkbox'
+    input.className = 'ef-set__switch'
+    input.checked = setting(name) !== false
+    input.addEventListener('change', function () {
+      var next = Object.assign({}, stored || {}, {})
+      next[name] = input.checked
+      saveSettings(next)
+      applySettings()
+      syncSettingsControls()
+      refreshBalance()
+    })
+    return input
+  }
+
+  /**
+   * A range control. `after` runs once the value is stored, for settings whose effect is not
+   * purely declarative - the volume control auditions the new level, the gauge span redraws.
+   */
+  function rangeControl(name, min, max, suffix, after) {
+    var wrap = doc.createElement('span')
+    wrap.className = 'ef-set__range'
+    var input = doc.createElement('input')
+    input.type = 'range'
+    input.min = String(min)
+    input.max = String(max)
+    input.step = '1'
+    input.value = String(setting(name))
+    var readout = doc.createElement('u')
+    readout.textContent = input.value + suffix
+    input.addEventListener('input', function () {
+      readout.textContent = input.value + suffix
+    })
+    input.addEventListener('change', function () {
+      var next = Object.assign({}, stored || {}, {})
+      next[name] = Number(input.value)
+      saveSettings(next)
+      applySettings()
+      if (typeof after === 'function') after()
+    })
+    wrap.appendChild(input)
+    wrap.appendChild(readout)
+    return wrap
+  }
+
+  /** A number control. `after` exists for the same reason as in `rangeControl`. */
+  function numberControl(name, min, max, suffix, after) {
+    var wrap = doc.createElement('span')
+    wrap.className = 'ef-set__number'
+    var input = doc.createElement('input')
+    input.type = 'number'
+    input.min = String(min)
+    input.max = String(max)
+    input.step = '1'
+    input.value = String(setting(name))
+    var unit = doc.createElement('u')
+    unit.textContent = suffix
+    input.addEventListener('change', function () {
+      var parsed = Number(input.value)
+      if (!isFinite(parsed)) parsed = DEFAULTS[name]
+      parsed = Math.min(max, Math.max(min, parsed))
+      input.value = String(parsed)
+      var next = Object.assign({}, stored || {}, {})
+      next[name] = parsed
+      saveSettings(next)
+      drawBalance()
+      if (typeof after === 'function') after()
+    })
+    wrap.appendChild(input)
+    wrap.appendChild(unit)
+    return wrap
+  }
+
+  function showOwnTab(parts, own) {
+    // Hide the SECTION, not the container it lives in: the container is the scroller, and the
+    // theme's page is inside it. Hiding the container took the page off screen with it.
+    parts.section.style.display = own ? 'none' : ''
+    var panel = doc.getElementById(SETTINGS_PANEL_ID)
+    if (panel !== null) panel.hidden = !own
+    var tabs = parts.nav.querySelectorAll('button')
+    for (var i = 0; i < tabs.length; i++) {
+      var isOwn = tabs[i].id === SETTINGS_TAB_ID
+      if (isOwn) {
+        if (own) tabs[i].setAttribute('data-ef-active', '1')
+        else tabs[i].removeAttribute('data-ef-active')
+      } else if (own) {
+        // The shell marks its own active tab with a class whose name is a build hash, so the
+        // only portable way to clear it is to match the part that is not.
+        var classes = (tabs[i].className || '').toString().split(/\s+/)
+        tabs[i].setAttribute('data-ef-was-active', '')
+        for (var c = 0; c < classes.length; c++) {
+          if (/active/i.test(classes[c])) tabs[i].classList.remove(classes[c])
+        }
+      }
+    }
+  }
+
+  function syncSettingsControls() {
+    var panel = doc.getElementById(SETTINGS_PANEL_ID)
+    if (panel === null) return
+    var inputs = panel.querySelectorAll('input[data-ef-setting]')
+    for (var i = 0; i < inputs.length; i++) {
+      var input = inputs[i]
+      var name = input.getAttribute('data-ef-setting')
+      if (input.type === 'checkbox') input.checked = setting(name) !== false
+      else input.value = String(setting(name))
+    }
+    syncSettingGates()
+  }
+
+  /**
+   * Which settings are decided by which.
+   *
+   * These are real dependencies, not visual grouping: with the splash off there is no sting to
+   * hear; with the reserve panel off there is no poll, so the warnings stop too; with the
+   * threshold at zero "full scale = threshold x N" means nothing.
+   *
+   * The rule for a child is simply "the parent's value is truthy", which covers both kinds of
+   * master: a switch that is off, and a number that is zero.
+   */
+  var SETTING_PARENT = {
+    bootAudio: 'splash',
+    crtStrength: 'crt',
+    pollSeconds: 'balance',
+    warnVoice: 'balance',
+    warnAt: 'balance',
+    warnVolume: 'warnVoice',
+    gaugeSpan: 'warnAt',
+  }
+
+  function settingDepth(name) {
+    var depth = 0
+    var cursor = name
+    while (SETTING_PARENT[cursor] !== undefined && depth < 8) {
+      cursor = SETTING_PARENT[cursor]
+      depth += 1
+    }
+    return depth
+  }
+
+  function settingUsable(name) {
+    var cursor = SETTING_PARENT[name]
+    while (cursor !== undefined) {
+      if (!setting(cursor)) return false
+      cursor = SETTING_PARENT[cursor]
+    }
+    return true
+  }
+
+  /**
+   * Grey out and genuinely disable anything whose master is off.
+   *
+   * `input.disabled` rather than a pointer-events trick, so a keyboard cannot reach a control
+   * that has no effect either. Rows are dimmed rather than hidden, so switching a master on and
+   * off does not make the page jump around under the pointer.
+   */
+  function syncSettingGates() {
+    var panel = doc.getElementById(SETTINGS_PANEL_ID)
+    if (panel === null) return
+    var rows = panel.querySelectorAll('.ef-set__row[data-ef-setting]')
+    for (var i = 0; i < rows.length; i++) {
+      var usable = settingUsable(rows[i].getAttribute('data-ef-setting'))
+      rows[i].classList.toggle('is-gated', !usable)
+      var inputs = rows[i].querySelectorAll('input')
+      for (var j = 0; j < inputs.length; j++) inputs[j].disabled = !usable
+    }
+  }
+
+  /** Play one of the warning clips at the configured volume. */
+  function auditionClip(which) {
+    try {
+      var clip = new window.Audio(
+        ROOT + (which === 'empty' ? '/assets/endfield-no-power.mp3' : '/assets/endfield-low-power.mp3'),
+      )
+      var level = Number(setting('warnVolume'))
+      clip.volume = isFinite(level) ? Math.min(1, Math.max(0, level / 100)) : 0.9
+      var started = clip.play()
+      if (started !== undefined && started !== null && typeof started.catch === 'function') {
+        started.catch(function () {
+          /* refused without a gesture; the button is the gesture, so this is rare */
+        })
+      }
+    } catch (err) {
+      /* no audio is not a failure worth reporting */
+    }
+  }
+
+  /** A button in the settings page, styled by `.ef-set__button`. */
+  function panelButton(label, onClick) {
+    var button = doc.createElement('button')
+    button.type = 'button'
+    button.className = 'ef-set__button'
+    button.textContent = label
+    button.addEventListener('click', onClick)
+    return button
+  }
+
+  /**
+   * Copy the settings out as JSON.
+   *
+   * The clipboard is the point, but it is also the part that can fail (a permission prompt, an
+   * insecure context), so a prompt showing the text is the fallback rather than an error. The
+   * button says "已复制" for a moment, because otherwise a successful copy looks like nothing
+   * happened at all.
+   */
+  function exportSettings(button) {
+    var json = JSON.stringify(stored || {})
+    var show = function () {
+      window.prompt('复制这段配置：', json)
+    }
+    var flash = function () {
+      if (button === null || button === undefined) return
+      var original = button.textContent
+      button.textContent = '已复制'
+      window.setTimeout(function () { button.textContent = original }, 1200)
+    }
+    try {
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        navigator.clipboard.writeText(json).then(flash, show)
+        return
+      }
+    } catch (err) {
+      /* fall through to the prompt */
+    }
+    show()
+  }
+
+  /**
+   * Take settings in as JSON.
+   *
+   * Only keys this build knows are copied across, so a pasted blob cannot introduce state the
+   * rest of the theme will never validate. A value of the wrong TYPE for a known key is dropped
+   * by the same pass - `setting()` falls back to the default for anything it cannot use, and a
+   * number arriving where a boolean belongs would otherwise read as a truthy switch.
+   */
+  function importSettings() {
+    var raw = window.prompt('粘贴配置 JSON：')
+    if (raw === null) return
+    var parsed
+    try {
+      parsed = JSON.parse(raw)
+    } catch (err) {
+      window.alert('配置解析失败：不是合法的 JSON')
+      return
+    }
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      window.alert('配置解析失败：顶层必须是一个对象')
+      return
+    }
+    var clean = {}
+    for (var key in DEFAULTS) {
+      if (!Object.prototype.hasOwnProperty.call(parsed, key)) continue
+      if (typeof parsed[key] !== typeof DEFAULTS[key]) continue
+      clean[key] = parsed[key]
+    }
+    if (Object.keys(clean).length === 0) {
+      window.alert('这段配置里没有可识别的项')
+      return
+    }
+    saveSettings(clean)
+    applySettings()
+    syncSettingsControls()
+    drawBalance()
+    startBalanceTimer()
+  }
+
+  function buildSettingsPanel() {
+    var panel = doc.createElement('div')
+    panel.id = SETTINGS_PANEL_ID
+    panel.hidden = true
+
+    var head = doc.createElement('div')
+    head.className = 'ef-set__head'
+    head.innerHTML = '<b>终末地主题</b><i>ENDFIELD THEME</i>'
+    panel.appendChild(head)
+
+    var list = doc.createElement('div')
+    list.className = 'ef-set__list'
+
+    // Parents before children: the order is the reading order of the page.
+    var spec = [
+      ['splash', 'toggle', '开屏动画', '每次加载播一次，约 2.9 s · 改后需刷新'],
+      ['bootAudio', 'toggle', '开屏音效', '开屏时播放的那条提示音 · 改后需刷新'],
+      ['brand', 'toggle', '替换侧栏品牌位', '换成终末地 lockup · 改后需刷新'],
+      ['crt', 'toggle', '屏幕细纹', '静态扫描线，不占每帧预算'],
+      ['crtStrength', 'range', '细纹强度', '0 = 关闭'],
+      ['turnRail', 'toggle', '轮次索引', '对话左侧的轮次号'],
+      ['conversation', 'toggle', '对话区背景', '有对话内容时的主视觉'],
+      ['balance', 'toggle', '侧栏电力储备', '把账户余额画成电量计'],
+      ['pollSeconds', 'number', '余额刷新间隔', '最小 15 秒'],
+      ['warnVoice', 'toggle', '余额语音播报', '低于阈值 / 耗尽时播报'],
+      ['warnVolume', 'range', '播报音量', '拖动即试听'],
+      ['warnAt', 'number', '预警阈值', '余额低于它播报一次'],
+      ['gaugeSpan', 'range', '电量计满量程', '阈值 × 这个倍数 = 满格'],
+    ]
+
+    for (var i = 0; i < spec.length; i++) {
+      var name = spec[i][0]
+      var kind = spec[i][1]
+      var control
+      if (kind === 'toggle') control = toggleControl(name)
+      else if (kind === 'range') {
+        if (name === 'crtStrength') control = rangeControl(name, 0, 60, '%')
+        else if (name === 'warnVolume') control = rangeControl(name, 0, 100, '%', function () { auditionClip('low') })
+        else control = rangeControl(name, 2, 12, 'x', drawBalance)
+      } else if (name === 'pollSeconds') control = numberControl(name, 15, 600, '秒', startBalanceTimer)
+      else control = numberControl(name, 0, 9999, '元')
+
+      if (control.tagName === 'INPUT') control.setAttribute('data-ef-setting', name)
+      else control.firstChild.setAttribute('data-ef-setting', name)
+      list.appendChild(settingsRow(name, spec[i][2], spec[i][3], control))
+    }
+
+    // Audition row. This is what the debug URL was for, in the form that needs no URL: press a
+    // button, hear the clip. It also exercises exactly the path the real warning uses.
+    var buttons = doc.createElement('span')
+    buttons.className = 'ef-set__buttons'
+    buttons.appendChild(panelButton('输出不足', function () { auditionClip('low') }))
+    buttons.appendChild(panelButton('储备耗尽', function () { auditionClip('empty') }))
+    list.appendChild(settingsRow('audition', '试听警告音', '立即播放，不改变任何设置', buttons))
+
+    // Maintenance row: the two operations every settings page of this size needs.
+    var tools = doc.createElement('span')
+    tools.className = 'ef-set__buttons'
+    tools.appendChild(panelButton('重置为默认', function () {
+      saveSettings({})
+      applySettings()
+      syncSettingsControls()
+      drawBalance()
+      startBalanceTimer()
+    }))
+    tools.appendChild(panelButton('导出', function (event) {
+      exportSettings(event.currentTarget)
+    }))
+    tools.appendChild(panelButton('导入', function () {
+      importSettings()
+    }))
+    list.appendChild(settingsRow('config', '配置', '导出复制到剪贴板，导入粘贴 JSON', tools))
+
+    panel.appendChild(list)
+
+    var note = doc.createElement('div')
+    note.className = 'ef-set__note'
+    note.textContent = '开屏 / 品牌位 / 开屏音效在下次刷新生效；URL 上的 ?dsh-endfield-<项>=0 优先级最高。'
+    panel.appendChild(note)
+
+    syncSettingGates()
+    return panel
+  }
+
+  function ensureSettingsPanel() {
+    // The id lookup comes FIRST and is cheap, so this can be called on every animation frame
+    // from the pump below without querying the dialog each time.
+    if (doc.getElementById(SETTINGS_TAB_ID) !== null) return
+    var parts = findSettingsParts()
+    if (parts === null) return
+
+    var tab = doc.createElement('button')
+    tab.id = SETTINGS_TAB_ID
+    tab.className = parts.lastTab.className
+    tab.type = 'button'
+    tab.innerHTML = '<span class="ef-set__tabLabel">终末地主题</span>'
+    tab.addEventListener('click', function () {
+      showOwnTab(parts, true)
+    })
+    parts.lastTab.parentNode.appendChild(tab)
+
+    // Any of the shell's own tabs hands the content area back.
+    parts.nav.addEventListener('click', function (event) {
+      var target = event.target
+      while (target !== null && target !== parts.nav && target.tagName !== 'BUTTON') {
+        target = target.parentNode
+      }
+      if (target === null || target === parts.nav) return
+      if (target.id === SETTINGS_TAB_ID) return
+      showOwnTab(parts, false)
+    })
+
+    // Inside the scroller, right after the section it replaces - so it scrolls with the
+    // dialog's own content instead of sitting outside it and running past the fold.
+    parts.options.insertBefore(buildSettingsPanel(), parts.section.nextSibling)
+  }
+
+  /**
+   * Install the panel the moment the dialog appears, instead of up to 200ms later.
+   *
+   * The dialog is opened by a click, so that click is the signal: pump on rAF for about a
+   * second and a half and stop as soon as the panel is in. This is what removes the visible
+   * delay - the shell renders the dialog a frame or two after the click, and the previous path
+   * (the conversation MutationObserver, which is deliberately debounced by 200ms to survive
+   * streaming transcripts) only noticed it after that window had elapsed.
+   *
+   * The observer path stays as the fallback, for a dialog opened some other way.
+   */
+  function pumpSettingsPanel() {
+    var frames = 0
+    var step = function () {
+      ensureSettingsPanel()
+      if (doc.getElementById(SETTINGS_TAB_ID) === null && frames++ < 90) {
+        window.requestAnimationFrame(step)
+      }
+    }
+    window.requestAnimationFrame(step)
+  }
+
+  /* -------------------------------------------------------- settings panel end */
+
   /* ------------------------------------------------------------------ brand */
 
   /**
@@ -171,13 +1114,7 @@
    * and the asset never lands in the accessibility tree twice.
    */
   function brandEnabled() {
-    try {
-      var query = new URLSearchParams(window.location.search)
-      if (query.get('dsh-endfield-brand') === '0') return false
-    } catch (err) {
-      /* an unparsable query string is not a reason to skip the branding */
-    }
-    return true
+    return setting('brand') !== false
   }
 
   /**
@@ -223,13 +1160,7 @@
 
   function splashEnabled() {
     if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return false
-    try {
-      var query = new URLSearchParams(window.location.search)
-      if (query.get('dsh-endfield-splash') === '0') return false
-    } catch (err) {
-      /* an unparsable query string is not a reason to skip the splash */
-    }
-    return true
+    return setting('splash') !== false
   }
 
   function ensureSplashStyle() {
@@ -306,6 +1237,10 @@
     var finished = false
     var doneTimer = null
     var goneTimer = null
+    var audio = null
+    var audioFade = null
+    var rafId = null
+    var pct = el.querySelector('.ef-splash__pct')
 
     function restore() {
       html.removeAttribute('data-ef-splash')
@@ -316,9 +1251,72 @@
       if (el.parentNode !== null) el.parentNode.removeChild(el)
     }
 
+    /**
+     * The read-out, driven off the clock animation rather than off `now`: on a cold
+     * start the row is parsed hundreds of milliseconds before this script arrives, so
+     * a counter started here would sit at 0% while the bar was already filling.
+     */
+    function tickProgress() {
+      var t = splashElapsed(el)
+      var ratio = (t - SPLASH_FILL_AT_MS) / SPLASH_FILL_MS
+      if (pct !== null) {
+        pct.textContent = (ratio <= 0 ? 0 : ratio >= 1 ? 100 : Math.round(ratio * 100)) + '%'
+      }
+      if (!finished) rafId = window.requestAnimationFrame(tickProgress)
+    }
+
+    /**
+     * Best effort, never awaited and never surfaced: a browser that refuses autoplay
+     * rejects the promise, and that is an expected outcome rather than a failure. If
+     * it is refused the splash simply runs silent.
+     */
+    function startAudio() {
+      if (setting('bootAudio') === false) return
+      try {
+        audio = new window.Audio(SPLASH_AUDIO)
+        audio.volume = 0.9
+        var started = audio.play()
+        if (started !== undefined && started !== null && typeof started.catch === 'function') {
+          started.catch(function () { audio = null })
+        }
+      } catch (err) {
+        audio = null
+      }
+    }
+
+    /**
+     * Fade rather than cut: the clip runs about 5.9s and the splash is over at 2.8s,
+     * so a hard stop would be audible. Detached from `audio` first, so dispose() and
+     * finish() cannot both fade the same node.
+     */
+    function stopAudio() {
+      if (audio === null) return
+      var node = audio
+      audio = null
+      var from = node.volume
+      var steps = 10
+      var n = 0
+      try {
+        audioFade = window.setInterval(function () {
+          n += 1
+          try { node.volume = Math.max(0, from * (1 - n / steps)) } catch (err) { /* ignore */ }
+          if (n >= steps) {
+            window.clearInterval(audioFade)
+            audioFade = null
+            try { node.pause() } catch (err) { /* ignore */ }
+          }
+        }, 45)
+      } catch (err) {
+        try { node.pause() } catch (e2) { /* ignore */ }
+      }
+    }
+
     function finish() {
       if (finished) return
       finished = true
+      if (rafId !== null) window.cancelAnimationFrame(rafId)
+      rafId = null
+      stopAudio()
       el.classList.add('is-done')
       restore()
       goneTimer = setTimeout(remove, SPLASH_FADE_MS)
@@ -334,10 +1332,18 @@
     doneTimer = setTimeout(finish, remaining)
     el.addEventListener('pointerdown', skip)
     window.addEventListener('keydown', skip, { once: true })
+    tickProgress()
+    startAudio()
 
     return function dispose() {
       clearTimeout(doneTimer)
       clearTimeout(goneTimer)
+      if (rafId !== null) window.cancelAnimationFrame(rafId)
+      if (audioFade !== null) window.clearInterval(audioFade)
+      if (audio !== null) {
+        try { audio.pause() } catch (err) { /* ignore */ }
+        audio = null
+      }
       remove()
     }
   }
@@ -393,7 +1399,7 @@
    */
   function syncConversationState() {
     var hasRows = doc.querySelector('[data-chat-anchor-key], [data-chat-flow-kind]') !== null
-    if (hasRows) html.setAttribute('data-ef-conversation', 'on')
+    if (hasRows && setting('conversation') !== false) html.setAttribute('data-ef-conversation', 'on')
     else html.removeAttribute('data-ef-conversation')
   }
 
@@ -420,6 +1426,10 @@
     window.requestAnimationFrame(pumpFrame)
     window.addEventListener('resize', syncFrame)
 
+    // Opening the settings dialog is a click, so a click is the wake-up call. Capture phase, so
+    // it still fires if the shell stops propagation on its own handlers.
+    doc.addEventListener('click', pumpSettingsPanel, true)
+
     // The shell owns its own DOM; watch only for our layers going missing
     // (a re-mount of body's children, a page-level cleanup) and put them back.
     try {
@@ -443,6 +1453,7 @@
         syncConversationState()
         syncFrame()
         decorateBrand()
+        ensureSettingsPanel()
       }, 200)
     })
     conversationObserver.observe(doc.body, { childList: true, subtree: true })
