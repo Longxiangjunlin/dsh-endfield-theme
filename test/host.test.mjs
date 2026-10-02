@@ -256,6 +256,35 @@ for (const cleanup of effectCleanups) cleanup()
 assert.equal(routes.length, 0, 'routes disposed')
 assert.equal(taps.length, 0, 'taps disposed')
 
+// --- file hygiene ---------------------------------------------------------
+//
+// Text that has been through a GBK round-trip. `Get-Content` reads a UTF-8 file as GBK on a
+// Chinese Windows console and `Set-Content` writes it back as UTF-8, so every multi-byte
+// character returns as its GBK misreading. It has happened twice while editing this plugin -
+// once inside CSS comments, once inside a Chinese string the code actually uses - and both
+// times it was caught by eye rather than by a check. This is the check.
+//
+// The BOM is the same mistake's other half: `Set-Content -Encoding UTF8` adds one, and a BOM in
+// a `.js` file that a browser loads is at best noise.
+const MOJIBAKE = /鈥|鈫|脳|寮€|灞忓|姩鐢|缁堟|湯鍦|锛|鐨|鏂|鍒|涓€|鍜|鏄|涓嶈/
+
+for (const file of [
+  'lib/index.js',
+  'client/theme.js',
+  'client/theme.css',
+  'client/splash.css',
+  'client/splash.html',
+  'package.json',
+]) {
+  const bytes = readFileSync(join(packageDir, file))
+  assert.notEqual(bytes[0], 0xef, `${file} starts with a UTF-8 BOM`)
+  assert.doesNotMatch(
+    bytes.toString('utf8'),
+    MOJIBAKE,
+    `${file} contains text that has been through a GBK round-trip`,
+  )
+}
+
 // A content hash makes accidental truncation of a shipped asset visible.
 const hash = (path) => createHash('sha256').update(path).digest('hex').slice(0, 12)
 console.log('host half OK — routes, injection row, tap, guards, teardown')
