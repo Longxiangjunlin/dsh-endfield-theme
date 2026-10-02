@@ -971,9 +971,9 @@
 
     // Parents before children: the order is the reading order of the page.
     var spec = [
-      ['splash', 'toggle', '开屏动画', '每次加载播一次，约 2.9 s · 改后需刷新'],
-      ['bootAudio', 'toggle', '开屏音效', '开屏时播放的那条提示音 · 改后需刷新'],
-      ['brand', 'toggle', '替换侧栏品牌位', '换成终末地 lockup · 改后需刷新'],
+      ['splash', 'toggle', '开屏动画', '每次加载播一次，约 2.9 s · 修改后重启客户端生效'],
+      ['bootAudio', 'toggle', '开屏音效', '开屏时播放的那条提示音 · 修改后重启客户端生效'],
+      ['brand', 'toggle', '替换侧栏品牌位', '换成终末地 lockup · 修改后重启客户端生效'],
       ['crt', 'toggle', '屏幕细纹', '静态扫描线，不占每帧预算'],
       ['crtStrength', 'range', '细纹强度', '0 = 关闭'],
       ['turnRail', 'toggle', '轮次索引', '对话左侧的轮次号'],
@@ -1033,7 +1033,7 @@
 
     var note = doc.createElement('div')
     note.className = 'ef-set__note'
-    note.textContent = '开屏 / 品牌位 / 开屏音效在下次刷新生效；URL 上的 ?dsh-endfield-<项>=0 优先级最高。'
+    note.textContent = '开屏 / 品牌位 / 开屏音效在重启客户端后生效；URL 上的 ?dsh-endfield-<项>=0 优先级最高。'
     panel.appendChild(note)
 
     syncSettingGates()
