@@ -1,5 +1,8 @@
 # dsh-endfield-theme · 《明日方舟：终末地》主题
 
+[![npm](https://img.shields.io/npm/v/dsh-endfield-theme)](https://www.npmjs.com/package/dsh-endfield-theme)
+[![license](https://img.shields.io/badge/license-MIT%20%2B%20asset%20exclusion-blue)](LICENSE)
+
 为 **DeepSeek Harness Web GUI** 做的一套终末地主题：炭黑工业 HUD + 警戒黄强调色，
 带**开屏动画**与**对话区背景**。它是一个普通的 DSH 客户端插件（host 半区发一条路由 +
 四条 index 注入行，浏览器半区是纯 CSS/JS），不依赖皮肤中心，也不需要构建步骤。
@@ -179,12 +182,29 @@ the Electron renderer.
 
 ## 安装
 
+**从 npm 装（推荐）** —— 走 registry，不需要 git，国内也能直连（npmmirror 已同步）：
+
 ```sh
-dsh plugin --profile desktop add github:Longxiangjunlin/dsh-endfield-theme
+dsh plugin --profile desktop add dsh-endfield-theme
 dsh plugin --profile desktop remove dsh-endfield-theme     # 卸载
 ```
 
-本地改代码时用 link 装，改 `client/` 下的文件刷新页面即生效：
+包页面在 <https://www.npmjs.com/package/dsh-endfield-theme>。**从 npm 装会跳过
+`allowBuilds` 授权提示**，一条命令装好。
+
+**从 GitHub 装** —— 等价，但需要能连上 github.com：
+
+```sh
+dsh plugin --profile desktop add github:Longxiangjunlin/dsh-endfield-theme
+```
+
+连不上 github.com 时，也可以直接下载镜像里的压缩包：
+
+```
+https://registry.npmmirror.com/dsh-endfield-theme/-/dsh-endfield-theme-1.0.0.tgz
+```
+
+**本地改代码**用 link 装，改 `client/` 下的文件刷新页面即生效：
 
 ```sh
 dsh plugin --profile desktop add link:<本仓库绝对路径>
@@ -193,6 +213,8 @@ dsh plugin --profile desktop add link:<本仓库绝对路径>
 **哪一半改动需要重启**：`client/` 下的文件按请求读盘，改完刷新即可；`lib/index.js` 是宿主
 半区，**桌面端的注入表在宿主启动时采集一次**——所以改注入行要重启一次客户端，
 浏览器形态则是下一次请求就重新采集。
+
+**发布新版本**：改 `package.json` 里的 `version`，然后 `npm publish`。同一个版本号不能发第二次。
 
 ## 文件
 
