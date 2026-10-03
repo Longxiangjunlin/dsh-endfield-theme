@@ -352,20 +352,28 @@ dsh plugin --profile desktop add github:Longxiangjunlin/dsh-endfield-theme
 https://registry.npmmirror.com/dsh-endfield-theme/-/dsh-endfield-theme-<版本>.tgz
 ```
 
-**刚发布的版本装不到？那是在等「新包冷静期」。** pnpm 11 内置了 `minimumReleaseAge`
-（实测默认 **24 小时**）：**发布不满 24 小时的版本一律不合格**，于是 pnpm 会**退回**到
-唯一通过冷静期的那一版 —— 而不是拒绝安装。所以一个刚发布过好几个版本、且都还很新的包，
-用户装到的会是**最老的那个通过冷静期的版本**，并且 pnpm 还会在输出里提示
-`+ dsh-endfield-theme 1.0.0 (1.3.0 is available)`。
+**装到的不是最新版？去插件市场的「已安装」里点更新。** 按包名直接重装会受 pnpm 11 的
+「新包冷静期」影响，而市场的更新按钮**正是为了绕开它而设计的** —— 下面把两条路都写清楚。
 
-这不是发布出错（npm 的 `latest` 是对的），也不是插件的问题，等满 24 小时自然就好。急着要新版可以：
+pnpm 11 默认带 `minimumReleaseAge`（DSH 的 profile 里写的是 `1440` 分钟，也就是 **24 小时**）：
+**发布不满 24 小时的版本一律不合格**。关键在于 pnpm 遇到这种情况**不是拒绝安装**，而是**退回**
+到唯一通过冷静期的版本，所以一个刚连发过几个版本的包，用户重装时拿到的会是**最老的那个合格版本**，
+并且输出里还会写着 `+ dsh-endfield-theme 1.0.0 (1.3.0 is available)` —— 它知道有新版，只是不能装。
+
+**更新请走市场**（`设置 → 插件 → 已安装 → 更新`）。它自己从 npm 查 `latest`，把这个版本**按名字**
+装下去并带上 `--config.minimum-release-age=0`，再把这一版记进 profile 的
+`minimumReleaseAgeExclude`，所以后续的普通安装也不会再被拦。这套行为在 `dshmarket` 的
+`lib/install.js`（`RELEASE_AGE_OVERRIDE`）和 `lib/routes.js` 里都能看到。
+
+命令行用户急着要新版也可以自己放宽（代价是放弃这道供应链防护，自己判断）：
 
 ```sh
-pnpm install --config.minimumReleaseAge=0
+pnpm install --config.minimum-release-age=0
 ```
 
-（代价就是放弃这道供应链防护，自己判断。）**对维护者的教训**：同一个包不要在 24 小时内连发多个
-版本，否则每个新版本都要等满一天才装得到。
+（注意是 `minimum-release-age`，带连字符 —— 不带连字符的写法在部分 pnpm 版本上不生效。）
+**对维护者的教训**：同一个包不要在 24 小时内连发多个版本，否则每个新版本都要等满一天
+才会被普通安装取到。
 
 **本地改代码**用 link 装，改 `client/` 下的文件刷新页面即生效：
 
