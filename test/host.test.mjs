@@ -9,12 +9,15 @@
 // is missing a file. Running it against the tarball is what catches that.
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const packageDir = process.env.DSH_ENDFIELD_PKG ?? fileURLToPath(new URL('..', import.meta.url))
-const { default: plugin } = await import(pathToFileURL(join(packageDir, 'lib/index.js')).href)
+const { default: plugin, stripSelfFromProfile } = await import(
+  pathToFileURL(join(packageDir, 'lib/index.js')).href
+)
 
 const rows = []
 const routes = []
@@ -283,6 +286,102 @@ for (const file of [
     MOJIBAKE,
     `${file} contains text that has been through a GBK round-trip`,
   )
+}
+
+// --- self-uninstall -------------------------------------------------------
+//
+// This is the one code path in the plugin that writes to a profile's own configuration, so it
+// gets fixtures rather than trust: a synthetic profile that also contains OTHER plugins, and
+// assertions that only this plugin's entries go and everything else survives byte for byte.
+const fixtureRoot = mkdtempSync(join(tmpdir(), 'ef-uninstall-'))
+try {
+  const profile = join(fixtureRoot, 'profiles', 'desktop')
+  mkdirSync(profile, { recursive: true })
+
+  const manifest = {
+    name: 'dsh-profile-desktop',
+    private: true,
+    dependencies: {
+      'dsh-endfield-theme': '^1.2.0',
+      dshmarket: '^1.66.6',
+      'dsh-whale-widget': '0.3.17',
+    },
+    dsh: {
+      profile: {
+        bundles: ['@deepseek-ai/dsh-base', 'dshmarket', 'dsh-whale-widget', 'dsh-endfield-theme'],
+      },
+    },
+  }
+  const manifestText = `${JSON.stringify(manifest, null, 2)}\n`
+  writeFileSync(join(profile, 'package.json'), manifestText)
+
+  const patch = [
+    '# a comment that must survive',
+    '- id: agent-default-model',
+    '  name: "@deepseek-ai/dsh-agent-default-model"',
+    '  config:',
+    '    model: deepseek-flash',
+    '- id: dsh-endfield-theme',
+    '  disabled: false',
+    '- id: ui-chat',
+    '  name: "@deepseek-ai/dsh-client-ui-chat"',
+    '  config:',
+    '    transcriptView: detailed',
+    '',
+  ].join('\n')
+  writeFileSync(join(profile, 'cordis.patch.yml'), patch)
+
+  const summary = stripSelfFromProfile(profile)
+  assert.equal(summary.error, null)
+  assert.deepEqual(
+    [...summary.changed].sort(),
+    ['bundles', 'dependencies', 'patch.yml (1 项)'].sort(),
+    'reports exactly what it changed',
+  )
+  assert.equal(summary.backup.length, 2, 'both files are backed up before being written')
+
+  const after = JSON.parse(readFileSync(join(profile, 'package.json'), 'utf8'))
+  assert.equal('dsh-endfield-theme' in after.dependencies, false, 'our dependency is gone')
+  assert.deepEqual(
+    after.dsh.profile.bundles,
+    ['@deepseek-ai/dsh-base', 'dshmarket', 'dsh-whale-widget'],
+    'only our bundle entry is gone',
+  )
+  assert.equal(after.dependencies.dshmarket, '^1.66.6', 'other dependencies untouched')
+
+  const afterPatch = readFileSync(join(profile, 'cordis.patch.yml'), 'utf8')
+  assert.doesNotMatch(afterPatch, /dsh-endfield-theme/, 'our patch entry is gone')
+  assert.match(afterPatch, /# a comment that must survive/, 'comments survive')
+  assert.match(afterPatch, /- id: agent-default-model/, 'the entry before ours survives')
+  assert.match(afterPatch, /    model: deepseek-flash/, 'and its config lines with it')
+  assert.match(afterPatch, /- id: ui-chat/, 'the entry after ours survives')
+  assert.match(afterPatch, /    transcriptView: detailed/, 'and its config lines with it')
+
+  // The backups hold the ORIGINAL, which is the difference between a repair and a reinstall.
+  const backedUpManifest = JSON.parse(readFileSync(`${join(profile, 'package.json')}.ef-uninstall-backup`, 'utf8'))
+  assert.ok('dsh-endfield-theme' in backedUpManifest.dependencies, 'backup is the original manifest')
+  assert.equal(readFileSync(`${join(profile, 'cordis.patch.yml')}.ef-uninstall-backup`, 'utf8'), patch, 'backup is the original patch')
+
+  // Running it again finds nothing to do, and does not pile up more backups.
+  const again = stripSelfFromProfile(profile)
+  assert.deepEqual(again.changed, [], 'a second run changes nothing')
+  assert.deepEqual(again.backup, [], 'a second run writes no backups')
+
+  // A profile that never named the plugin is left completely alone.
+  const clean = join(fixtureRoot, 'profiles', 'web')
+  mkdirSync(clean, { recursive: true })
+  const cleanManifest = '{"name":"dsh-profile-web","private":true}\n'
+  writeFileSync(join(clean, 'package.json'), cleanManifest)
+  const cleanSummary = stripSelfFromProfile(clean)
+  assert.deepEqual(cleanSummary.changed, [], 'nothing to change in an unrelated profile')
+  assert.equal(readFileSync(join(clean, 'package.json'), 'utf8'), cleanManifest, 'left byte for byte identical')
+  assert.equal(
+    existsSync(`${join(clean, 'package.json')}.ef-uninstall-backup`),
+    false,
+    'and no backup is written for a file it did not touch',
+  )
+} finally {
+  rmSync(fixtureRoot, { recursive: true, force: true })
 }
 
 // A content hash makes accidental truncation of a shipped asset visible.

@@ -32,7 +32,7 @@
   var SPLASH_AUDIO = ROOT + '/assets/endfield-boot.mp3'
 
   if (window.__dshEndfieldTheme) return
-  window.__dshEndfieldTheme = { version: '1.2.0' }
+  window.__dshEndfieldTheme = { version: '1.3.0' }
 
   var doc = document
   var html = doc.documentElement
@@ -104,6 +104,7 @@
   }
 
   function ensureCrt() {
+    if (uninstalled) return
     if (!crtEnabled()) return
     var body = doc.body
     if (body === null) return
@@ -120,7 +121,19 @@
     body.appendChild(crtElement)
   }
 
+  /**
+   * Set once the user has uninstalled the plugin from its own settings page.
+   *
+   * Everything in this script is idempotent and self-healing by design - a rAF pump, a
+   * MutationObserver, a debounced conversation tick - which is exactly what makes it come back
+   * after it has been torn down. The tear-down is only cosmetic anyway (the script cannot
+   * unload itself), so the honest thing is to stop rebuilding and let the restart finish the
+   * job. Every rebuilder checks this first.
+   */
+  var uninstalled = false
+
   function ensureBackdrop() {
+    if (uninstalled) return
     var body = doc.body
     if (body === null) return
     var existing = doc.getElementById('ef-backdrop')
@@ -570,6 +583,7 @@
   }
 
   function ensureBalance() {
+    if (uninstalled) return
     var body = doc.body
     if (body === null) return
     if (!setting('balance')) {
@@ -986,10 +1000,11 @@
 
   function clearPluginData() {
     var confirmed = window.confirm(
-      '清除本插件的全部本地数据？\n\n' +
-        '· 13 项设置会回到默认值\n' +
-        '· 「今日变化」的统计基线会被清掉，本次会话内不再重新记录\n\n' +
-        '这不会卸载插件本身。卸载命令会随后复制到剪贴板。',
+      '卸载终末地主题？\n\n' +
+        '· 从 DSH 的 profile 里移除本插件（会先备份配置文件）\n' +
+        '· 清空本插件的全部本地数据：13 项设置与「今日变化」统计\n' +
+        '· 界面上立即消失，重启客户端后完全生效\n\n' +
+        '（不会动 profile 里任何其他插件。）',
     )
     if (!confirmed) return
 
@@ -1016,33 +1031,109 @@
     drawBalance()
     startBalanceTimer()
 
-    var finish = function (copied) {
-      window.alert(
-        (cleared.length === 0 ? '本来就没有残留数据。' : '已清除：' + cleared.join('、') + '。') +
-          '\n\n设置已回到默认值，当前页面立即生效。' +
-          '\n\n要卸载插件本身，在终端运行：\n' +
-          UNINSTALL_COMMAND +
-          (copied
-            ? '\n\n（命令已复制到剪贴板）'
-            : '\n\n（剪贴板不可用，请手动复制上面这行）'),
-      )
+    /**
+     * Take the plugin's own marks off the page.
+     *
+     * The running script cannot unload itself, but everything it put in the document can go -
+     * so the interface looks uninstalled immediately rather than after a restart. The observer
+     * is disconnected first, or it would helpfully rebuild the layers a frame later.
+     */
+    function removeOwnDom() {
+      // Before anything else: stop the rebuilders. The rAF pump and the debounced conversation
+      // tick are still scheduled, and they would put the brand and the layers straight back.
+      uninstalled = true
+      try {
+        if (window.__dshEndfieldTheme && window.__dshEndfieldTheme.observer) {
+          window.__dshEndfieldTheme.observer.disconnect()
+        }
+      } catch (err) {
+        /* nothing to disconnect */
+      }
+      var ids = ['ef-power', 'ef-crt', 'ef-backdrop', 'ef-splash', SETTINGS_PANEL_ID, SETTINGS_TAB_ID]
+      for (var i = 0; i < ids.length; i++) {
+        var node = doc.getElementById(ids[i])
+        if (node !== null && node.parentNode !== null) node.parentNode.removeChild(node)
+      }
+      var brands = doc.querySelectorAll('.ef-brand')
+      for (var b = 0; b < brands.length; b++) {
+        if (brands[b].parentNode !== null) brands[b].parentNode.removeChild(brands[b])
+      }
+      html.removeAttribute('data-ef-splash')
+      html.removeAttribute('data-ef-brand')
+      html.removeAttribute('data-ef-conversation')
+      html.removeAttribute('data-ef-rail')
+      html.removeAttribute('data-ef-crt')
+      html.removeAttribute('data-dsh-endfield')
     }
 
-    // `writeText` returns a promise, and it REJECTS when the document has no focus - which is
-    // exactly what happens on a page the user has not clicked into. Treating the returned value
-    // as a success flag would claim the command was copied when it was not.
-    try {
-      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-        navigator.clipboard.writeText(UNINSTALL_COMMAND).then(
-          function () { finish(true) },
-          function () { finish(false) },
-        )
-        return
-      }
-    } catch (err) {
-      /* fall through to the manual path */
+    var report = function (text) {
+      removeOwnDom()
+      window.alert(text)
     }
-    finish(false)
+
+    /**
+     * Ask the host to take the plugin out of the profile.
+     *
+     * The host owns that write; the page cannot do it. A failure here is reported as a failure -
+     * the local data is cleared either way, so the honest outcome is "data cleared, uninstall
+     * did not happen, here is the command".
+     */
+    var request
+    try {
+      request = window.fetch(ROOT + '/uninstall', { method: 'POST', credentials: 'same-origin' })
+    } catch (err) {
+      request = null
+    }
+    if (request === null) {
+      report(
+        '本地数据已清除，但没能联系到宿主半区。\n\n' +
+          '本次运行的版本可能还没有这个接口 —— 重启客户端后再试一次，或手动运行：\n' +
+          UNINSTALL_COMMAND,
+      )
+      return
+    }
+
+    request
+      .then(function (response) {
+        return response.ok ? response.json() : null
+      })
+      .then(function (payload) {
+        var head = cleared.length === 0 ? '本地数据本来就没有残留。' : '已清除：' + cleared.join('、') + '。'
+        if (payload !== null && payload.ok === true) {
+          var which = Array.isArray(payload.profiles)
+            ? payload.profiles.map(function (entry) {
+                var parts = []
+                if (entry.changed && entry.changed.length > 0) parts.push(entry.changed.join(' + '))
+                if (entry.backup && entry.backup.length > 0) parts.push('已备份')
+                return parts.join('，') || '无需改动'
+              }).join('；')
+            : ''
+          report(
+            head +
+              '\n\n已从 profile 移除本插件' +
+              (which === '' ? '' : '（' + which + '）') +
+              '。\n\n界面已清空，**重启客户端后完全生效**。' +
+              '\n\n卸载命令同样留一份在这：\n' +
+              UNINSTALL_COMMAND,
+          )
+          return
+        }
+        var why = payload !== null && typeof payload.error === 'string' ? payload.error : '宿主半区返回了失败'
+        report(
+          head +
+            '\n\n但自动卸载没有成功：' +
+            why +
+            '\n\n请在终端手动运行：\n' +
+            UNINSTALL_COMMAND,
+        )
+      })
+      .catch(function () {
+        report(
+          (cleared.length === 0 ? '本地数据本来就没有残留。' : '已清除：' + cleared.join('、') + '。') +
+            '\n\n但自动卸载没有成功（请求失败）。\n\n请在终端手动运行：\n' +
+            UNINSTALL_COMMAND,
+        )
+      })
   }
 
   function buildSettingsPanel() {
@@ -1139,6 +1230,7 @@
   }
 
   function ensureSettingsPanel() {
+    if (uninstalled) return
     // The id lookup comes FIRST and is cheap, so this can be called on every animation frame
     // from the pump below without querying the dialog each time.
     if (doc.getElementById(SETTINGS_TAB_ID) !== null) return
@@ -1228,6 +1320,7 @@
    * control *does* changes.
    */
   function decorateBrand() {
+    if (uninstalled) return
     if (!brandEnabled()) return
     var button = doc.querySelector('[data-slot="sidebar"] button[class*="brand"]')
     if (button === null || button.getAttribute('data-ef-brand') === 'on') return
