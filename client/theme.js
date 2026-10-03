@@ -32,7 +32,7 @@
   var SPLASH_AUDIO = ROOT + '/assets/endfield-boot.mp3'
 
   if (window.__dshEndfieldTheme) return
-  window.__dshEndfieldTheme = { version: '1.1.1' }
+  window.__dshEndfieldTheme = { version: '1.2.0' }
 
   var doc = document
   var html = doc.documentElement
@@ -371,6 +371,8 @@
   }
 
   function noteSpend(amount) {
+    // After a wipe the baseline is deliberately NOT re-derived; see `dataWiped`.
+    if (dataWiped) return
     if (!isFinite(amount)) return
     var day = dayKey()
     var stored = null
@@ -956,6 +958,93 @@
     startBalanceTimer()
   }
 
+  /**
+   * Wipe everything this plugin has ever stored, in one action.
+   *
+   * The point is a clean install of a later version: the two localStorage keys below are the
+   * COMPLETE list of what this plugin writes anywhere - no cookies, no files, and the host
+   * half's balance cache is memory-only - so removing them is genuinely everything.
+   *
+   * What it deliberately does NOT do is uninstall the package. That means editing the
+   * profile's package.json and cordis.patch.yml, which is the user's own configuration: a
+   * plugin that rewrites it from inside a page can break the client it is running in, and that
+   * is not a trade worth making to save one paste. Instead the command is copied to the
+   * clipboard so finishing the job is one paste, and the dialog says exactly what was and was
+   * not done.
+   */
+  var UNINSTALL_COMMAND = 'dsh plugin --profile desktop remove dsh-endfield-theme'
+
+  /**
+   * True once the data has been wiped on this page.
+   *
+   * Without it the wipe undoes itself: `drawBalance()` runs right afterwards, and it derives the
+   * day's baseline from the current balance and writes that back - so the key the button just
+   * removed reappears within a frame. The flag suppresses the DERIVED value only. A setting the
+   * user changes afterwards is a new choice and is still saved.
+   */
+  var dataWiped = false
+
+  function clearPluginData() {
+    var confirmed = window.confirm(
+      '清除本插件的全部本地数据？\n\n' +
+        '· 13 项设置会回到默认值\n' +
+        '· 「今日变化」的统计基线会被清掉，本次会话内不再重新记录\n\n' +
+        '这不会卸载插件本身。卸载命令会随后复制到剪贴板。',
+    )
+    if (!confirmed) return
+
+    var cleared = []
+    try {
+      if (window.localStorage.getItem(SETTINGS_KEY) !== null) cleared.push('设置')
+      window.localStorage.removeItem(SETTINGS_KEY)
+    } catch (err) {
+      /* private mode: nothing was stored to begin with */
+    }
+    try {
+      if (window.localStorage.getItem(SPEND_KEY) !== null) cleared.push('统计基线')
+      window.localStorage.removeItem(SPEND_KEY)
+    } catch (err) {
+      /* as above */
+    }
+
+    dataWiped = true
+    stored = null
+    spendBaseline = null
+    warnedLevel = null
+    applySettings()
+    syncSettingsControls()
+    drawBalance()
+    startBalanceTimer()
+
+    var finish = function (copied) {
+      window.alert(
+        (cleared.length === 0 ? '本来就没有残留数据。' : '已清除：' + cleared.join('、') + '。') +
+          '\n\n设置已回到默认值，当前页面立即生效。' +
+          '\n\n要卸载插件本身，在终端运行：\n' +
+          UNINSTALL_COMMAND +
+          (copied
+            ? '\n\n（命令已复制到剪贴板）'
+            : '\n\n（剪贴板不可用，请手动复制上面这行）'),
+      )
+    }
+
+    // `writeText` returns a promise, and it REJECTS when the document has no focus - which is
+    // exactly what happens on a page the user has not clicked into. Treating the returned value
+    // as a success flag would claim the command was copied when it was not.
+    try {
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        navigator.clipboard.writeText(UNINSTALL_COMMAND).then(
+          function () { finish(true) },
+          function () { finish(false) },
+        )
+        return
+      }
+    } catch (err) {
+      /* fall through to the manual path */
+    }
+    finish(false)
+  }
+
   function buildSettingsPanel() {
     var panel = doc.createElement('div')
     panel.id = SETTINGS_PANEL_ID
@@ -1028,6 +1117,15 @@
       importSettings()
     }))
     list.appendChild(settingsRow('config', '配置', '导出复制到剪贴板，导入粘贴 JSON', tools))
+
+    // One button, for the moment before installing a new version: wipe everything this plugin
+    // has ever written, so nothing of the old build leaks into the new one.
+    var wipe = doc.createElement('span')
+    wipe.className = 'ef-set__buttons'
+    wipe.appendChild(panelButton('清除本插件数据', function () {
+      clearPluginData()
+    }))
+    list.appendChild(settingsRow('wipe', '清除数据', '清空设置与统计，并把卸载命令复制到剪贴板', wipe))
 
     panel.appendChild(list)
 
@@ -1477,6 +1575,20 @@
     pokeCaptionColors()
     splashMarkupPromise = null
     runSplash()
+  }
+
+  /**
+   * Build the settings page on demand.
+   *
+   * Exposed for the same reason `replay()` is: it is the only way to exercise the page outside
+   * the click that normally opens it. A test that loads a second copy of this script into a page
+   * that already has one cannot win the race for the dialog - whichever copy registered its
+   * click pump first builds the page - so being able to call the builder directly is what makes
+   * the un-installed code testable at all.
+   */
+  window.__dshEndfieldTheme.buildSettings = function buildSettings() {
+    ensureSettingsPanel()
+    return doc.getElementById(SETTINGS_PANEL_ID) !== null
   }
 
   start()
