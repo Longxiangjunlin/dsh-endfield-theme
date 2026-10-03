@@ -345,11 +345,27 @@ dsh plugin --profile desktop remove dsh-endfield-theme     # 卸载
 dsh plugin --profile desktop add github:Longxiangjunlin/dsh-endfield-theme
 ```
 
-连不上 github.com 时，也可以直接下载镜像里的压缩包：
+连不上 github.com 时，也可以直接下压缩包 —— 把下面地址里的 `<版本>` 换成要装的版本
+（在包页面上能看到当前版本）：
 
 ```
-https://registry.npmmirror.com/dsh-endfield-theme/-/dsh-endfield-theme-1.0.0.tgz
+https://registry.npmmirror.com/dsh-endfield-theme/-/dsh-endfield-theme-<版本>.tgz
 ```
+
+**刚发布的版本装不到？那是在等「新包冷静期」。** pnpm 11 内置了 `minimumReleaseAge`
+（实测默认 **24 小时**）：**发布不满 24 小时的版本一律不合格**，于是 pnpm 会**退回**到
+唯一通过冷静期的那一版 —— 而不是拒绝安装。所以一个刚发布过好几个版本、且都还很新的包，
+用户装到的会是**最老的那个通过冷静期的版本**，并且 pnpm 还会在输出里提示
+`+ dsh-endfield-theme 1.0.0 (1.3.0 is available)`。
+
+这不是发布出错（npm 的 `latest` 是对的），也不是插件的问题，等满 24 小时自然就好。急着要新版可以：
+
+```sh
+pnpm install --config.minimumReleaseAge=0
+```
+
+（代价就是放弃这道供应链防护，自己判断。）**对维护者的教训**：同一个包不要在 24 小时内连发多个
+版本，否则每个新版本都要等满一天才装得到。
 
 **本地改代码**用 link 装，改 `client/` 下的文件刷新页面即生效：
 
