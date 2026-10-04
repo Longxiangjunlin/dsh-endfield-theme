@@ -32,7 +32,7 @@
   var SPLASH_AUDIO = ROOT + '/assets/endfield-boot.mp3'
 
   if (window.__dshEndfieldTheme) return
-  window.__dshEndfieldTheme = { version: '1.3.0' }
+  window.__dshEndfieldTheme = { version: '1.3.1' }
 
   var doc = document
   var html = doc.documentElement

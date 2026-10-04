@@ -1412,11 +1412,36 @@ body:not([data-ds-dark-theme]) {
 /* The composer: a cut-corner instrument panel with the yellow focus edge.
    No `backdrop-filter` here on purpose — a non-none backdrop-filter makes the
    card the containing block for the shell's fixed-position tooltips, which
-   drags the conversation around on hover. */
+   drags the conversation around on hover.
+
+   And NO `clip-path` on the card itself, which was a worse version of the same
+   problem. The shell renders the "+" add-menu INSIDE this card — the menu's
+   own container (._surface_ri079_1) is a child of it — and lays that container
+   out well ABOVE the card. `clip-path` removes a box from the paint without
+   touching its layout box, so the menu was laid out, positioned correctly, and
+   completely invisible: getBoundingClientRect still reported it and
+   elementFromPoint at the button was clean, but elementsFromPoint at the
+   menu's own centre showed the page behind it. The button looked dead.
+
+   So the notch is drawn by a pseudo-element, which is a leaf: it can clip the
+   background and can never clip a child of the card. It sits at z-index 0 so
+   the shell's own surface (z-index 100) still paints above it. */
 [data-composer-card='true'] {
-  background-color: var(--dsw-specific-input-major) !important;
-  border: 1px solid var(--dsw-alias-border-l2) !important;
-  border-radius: 3px !important;
+  background-color: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  clip-path: none !important;
+  box-shadow: none !important;
+}
+
+[data-composer-card='true']::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-color: var(--dsw-specific-input-major);
+  border: 1px solid var(--dsw-alias-border-l2);
   clip-path: polygon(
     0 0,
     calc(100% - 13px) 0,
@@ -1429,8 +1454,8 @@ body:not([data-ds-dark-theme]) {
   transition: border-color 0.16s var(--ef-ease), box-shadow 0.16s var(--ef-ease);
 }
 
-[data-composer-card='true']:focus-within {
-  border-color: var(--ef-y-45) !important;
+[data-composer-card='true']:focus-within::before {
+  border-color: var(--ef-y-45);
   box-shadow: 0 0 0 1px var(--ef-y-20), 0 0 24px rgba(242, 240, 19, 0.1), 0 12px 34px rgba(0, 0, 0, 0.42);
 }
 
