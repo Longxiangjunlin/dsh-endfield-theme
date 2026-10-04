@@ -1424,9 +1424,20 @@ body:not([data-ds-dark-theme]) {
    menu's own centre showed the page behind it. The button looked dead.
 
    So the notch is drawn by a pseudo-element, which is a leaf: it can clip the
-   background and can never clip a child of the card. It sits at z-index 0 so
-   the shell's own surface (z-index 100) still paints above it. */
+   background and can never clip a child of the card.
+
+   The pseudo sits at z-index -1 so it paints BEHIND the card's content, and it
+   has to: a positioned element at z-index 0 paints above in-flow inline content,
+   which is where the "+" icon lives - at 0 the panel covered its own icons and
+   the button worked while looking empty. The card also gets `isolation: isolate`
+   so that -1 stays inside this card; without a stacking context here it would
+   drop behind an ancestor's background instead.
+
+   `isolation` is safe for the add-menu: it is a descendant of this card either
+   way (its container ._surface_ri079_1 is), so scoping its z-index to the card
+   changes nothing about what it can cover. */
 [data-composer-card='true'] {
+  isolation: isolate;
   background-color: transparent !important;
   border: none !important;
   border-radius: 0 !important;
@@ -1438,7 +1449,7 @@ body:not([data-ds-dark-theme]) {
   content: '';
   position: absolute;
   inset: 0;
-  z-index: 0;
+  z-index: -1;
   pointer-events: none;
   background-color: var(--dsw-specific-input-major);
   border: 1px solid var(--dsw-alias-border-l2);
