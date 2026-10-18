@@ -23,8 +23,7 @@
     "client",
     "cordis.patch.yml",
     "README.md",
-    "NOTICE.md",
-    "VOICE.md"
+    "NOTICE.md"
   ],
   "scripts": {
     "test": "node test/host.test.mjs"

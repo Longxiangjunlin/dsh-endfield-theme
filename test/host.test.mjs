@@ -16,12 +16,6 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const packageDir = process.env.DSH_ENDFIELD_PKG ?? fileURLToPath(new URL('..', import.meta.url))
 
-// A throwaway DSH_HOME, set before the module is imported: the voice-pack directory is resolved
-// once, at import time, so pointing it at a temp directory is what makes the pack routes testable
-// without writing anything into the real one.
-const testHome = mkdtempSync(join(tmpdir(), 'ef-home-'))
-process.env.DSH_HOME = testHome
-
 const { default: plugin, stripSelfFromProfile } = await import(
   pathToFileURL(join(packageDir, 'lib/index.js')).href
 )
@@ -263,7 +257,10 @@ assert.ok(tapped.indexOf('<style>') < tapped.indexOf('</body>'))
 assert.equal(taps[0](tapped), tapped, 'tap is idempotent')
 
 // --- teardown -------------------------------------------------------------
-// Moved to the end of the file: the voice-pack tests below need the routes to still be live.
+for (const cleanup of effectCleanups) cleanup()
+assert.equal(routes.length, 0, 'routes disposed')
+assert.equal(taps.length, 0, 'taps disposed')
+
 
 // --- file hygiene ---------------------------------------------------------
 //
@@ -389,52 +386,6 @@ try {
 } finally {
   rmSync(fixtureRoot, { recursive: true, force: true })
 }
-
-// --- voice packs ----------------------------------------------------------
-const voiceRoot = join(testHome, 'endfield-voice')
-mkdirSync(join(voiceRoot, '佩丽卡'), { recursive: true })
-const fakeMp3 = Buffer.from([0x49, 0x44, 0x33, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
-writeFileSync(join(voiceRoot, '佩丽卡', 'low.zh.mp3'), fakeMp3)
-writeFileSync(join(voiceRoot, '佩丽卡', 'boot.en.wav'), Buffer.from('RIFF0000WAVE', 'utf8'))
-// Not recognised shapes: wrong clip name, wrong language, wrong extension, stray notes.
-writeFileSync(join(voiceRoot, '佩丽卡', 'bogus.zh.mp3'), fakeMp3)
-writeFileSync(join(voiceRoot, '佩丽卡', 'low.ko.mp3'), fakeMp3)
-writeFileSync(join(voiceRoot, '佩丽卡', 'low.zh.txt'), 'not audio')
-writeFileSync(join(voiceRoot, '佩丽卡', 'README.txt'), 'notes')
-
-const listing = call('/dsh-endfield/voice-packs')
-assert.equal(listing.status, 200)
-const listed = JSON.parse(listing.body.toString('utf8'))
-assert.equal(listed.ok, true)
-assert.equal(listed.packs.length, 1, 'only the folder with recognised files is listed')
-assert.equal(listed.packs[0].name, '佩丽卡')
-assert.equal(listed.packs[0].count, 2, 'two recognised files, four stray ones ignored')
-assert.equal(listed.packs[0].clips.low.zh, 'low.zh.mp3')
-assert.equal(listed.packs[0].clips.boot.en, 'boot.en.wav')
-assert.deepEqual(listed.packs[0].clips.empty, undefined, 'no empty clip in this pack')
-
-const servedMp3 = call(`/dsh-endfield/voice/${encodeURIComponent('佩丽卡')}/low.zh.mp3`)
-assert.equal(servedMp3.status, 200)
-assert.equal(servedMp3.headers['content-type'], 'audio/mpeg')
-assert.ok(servedMp3.body.equals(fakeMp3), 'bytes come back unchanged')
-
-const servedWav = call(`/dsh-endfield/voice/${encodeURIComponent('佩丽卡')}/boot.en.wav`)
-assert.equal(servedWav.status, 200)
-assert.equal(servedWav.headers['content-type'], 'audio/wav')
-
-assert.equal(call(`/dsh-endfield/voice/${encodeURIComponent('佩丽卡')}/bogus.zh.mp3`).status, 404, 'unknown clip name')
-assert.equal(call(`/dsh-endfield/voice/${encodeURIComponent('佩丽卡')}/low.ko.mp3`).status, 404, 'unknown language')
-assert.equal(call(`/dsh-endfield/voice/${encodeURIComponent('佩丽卡')}/low.zh.txt`).status, 404, 'not an audio extension')
-assert.equal(call(`/dsh-endfield/voice/${encodeURIComponent('佩丽卡')}/README.txt`).status, 404, 'stray file')
-assert.equal(call('/dsh-endfield/voice/%2e%2e/package.json').status, 404, 'pack traversal refused')
-assert.equal(call('/dsh-endfield/voice/%2e%2e%2f%2e%2e/low.zh.mp3').status, 404, 'encoded traversal refused')
-assert.equal(call(`/dsh-endfield/voice/${encodeURIComponent('不存在')}/low.zh.mp3`).status, 404, 'missing pack')
-
-// --- teardown -------------------------------------------------------------
-for (const cleanup of effectCleanups) cleanup()
-assert.equal(routes.length, 0, 'routes disposed')
-assert.equal(taps.length, 0, 'taps disposed')
-rmSync(testHome, { recursive: true, force: true })
 
 // A content hash makes accidental truncation of a shipped asset visible.
 const hash = (path) => createHash('sha256').update(path).digest('hex').slice(0, 12)
