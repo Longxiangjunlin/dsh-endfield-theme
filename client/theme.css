@@ -322,6 +322,67 @@ html[data-ef-balance='off'] #ef-power {
   --ef-power-accent: rgba(237, 240, 234, 0.28);
 }
 
+/* --------------------------------------------------------------------------
+   The same panel on the light sidebar
+   --------------------------------------------------------------------------
+   Every colour above was authored for the charcoal sidebar, where pale ink on a dark field is
+   legible. On the snow sidebar those same values measure 1.04 (title), 1.12 (figure) and 1.96
+   (secondary text) against rgb(244, 246, 240) - the panel effectively disappears, which is what
+   the report described.
+
+   So the light variant goes to ink on paper: dark text, and accents dark enough to carry the
+   three states while staying recognisable as the same three states (5.2 / 4.7 / 5.4 : 1). The
+   meter inverts with it - a light track, and light ticks, because the fill is now dark and the
+   dark ticks used above would vanish into it. */
+body:not([data-ds-dark-theme]) #ef-power {
+  color: #14170f;
+  --ef-power-nominal: #6b6a00;
+  --ef-power-low: #a35c00;
+  --ef-power-empty: #c0271d;
+  border-color: rgba(20, 24, 20, 0.22);
+  background: linear-gradient(180deg, rgba(107, 106, 0, 0.08), rgba(107, 106, 0, 0.02));
+}
+
+body:not([data-ds-dark-theme]) .ef-power__head span {
+  color: #14170f;
+}
+
+body:not([data-ds-dark-theme]) .ef-power__head i,
+body:not([data-ds-dark-theme]) .ef-power__caption,
+body:not([data-ds-dark-theme]) .ef-power__spend {
+  color: #5a6058;
+}
+
+body:not([data-ds-dark-theme]) .ef-power__spend[data-sign='up'] {
+  color: #6b6a00;
+}
+
+body:not([data-ds-dark-theme]) .ef-power__meter {
+  border-color: rgba(20, 24, 20, 0.3);
+  background: rgba(20, 24, 20, 0.1);
+}
+
+body:not([data-ds-dark-theme]) .ef-power__ticks {
+  background-image: repeating-linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.62) 0 1px,
+    rgba(255, 255, 255, 0) 1px 10%
+  );
+}
+
+body:not([data-ds-dark-theme]) #ef-power[data-state='low'] {
+  border-color: rgba(163, 92, 0, 0.5);
+}
+
+body:not([data-ds-dark-theme]) #ef-power[data-state='empty'] {
+  border-color: rgba(192, 39, 29, 0.5);
+  background: linear-gradient(180deg, rgba(192, 39, 29, 0.1), rgba(192, 39, 29, 0.02));
+}
+
+body:not([data-ds-dark-theme]) #ef-power[data-state='unknown'] {
+  --ef-power-accent: rgba(20, 24, 20, 0.4);
+}
+
 /* The alarm state breathes. Slow and shallow on purpose: this is a readout that has gone
    critical, not a notification demanding a click. */
 #ef-power[data-state='empty'] .ef-power__meter {
@@ -624,6 +685,32 @@ body:not([data-ds-dark-theme]) .ef-set__row.is-gated .ef-set__text b {
   border-color: var(--ef-y-45);
 }
 
+/* The select. Same box as the number field so a row of mixed controls lines up, but the arrow is
+   drawn by the platform: a native popup cannot be clipped by an ancestor, which matters here
+   because the settings page lives inside the shell's dialog. */
+.ef-set__select select {
+  min-width: 150px;
+  padding: 4px 8px;
+  font-family: var(--ef-sans);
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--ef-y);
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--ef-y-20);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.ef-set__select select:focus {
+  outline: none;
+  border-color: var(--ef-y-45);
+}
+
+.ef-set__select select option {
+  color: #edf0ea;
+  background: #14170f;
+}
+
 .ef-set__note {
   font-size: 12px;
   line-height: 18px;
@@ -750,7 +837,89 @@ body:not([data-ds-dark-theme]) .ef-set__text b {
 
 body:not([data-ds-dark-theme]) .ef-set__text i,
 body:not([data-ds-dark-theme]) .ef-set__note {
-  color: rgba(20, 24, 26, 0.42);
+  /* Measured: 0.42 alpha of near-black over the light surface lands at ~2.6:1, which is under AA
+     for 12px text. 0.58 gives ~4.9:1 and still reads as secondary. */
+  color: rgba(20, 24, 26, 0.58);
+}
+
+body:not([data-ds-dark-theme]) .ef-set__select select,
+body:not([data-ds-dark-theme]) .ef-set__number input {
+  color: rgb(20, 24, 26);
+  background: rgba(255, 255, 255, 0.72);
+  border-color: rgba(107, 106, 0, 0.34);
+}
+
+body:not([data-ds-dark-theme]) .ef-set__select select option {
+  color: #14170f;
+  background: #f7f8f4;
+}
+
+/* Light mode: the theme's own controls. Hazard yellow is a dark-field accent - on paper it
+   measures 1.22:1, which is what the audit found for the panel title, every numeric readout and
+   every button in the settings page. Ink and the light-mode accent replace it; the same shift the
+   power panel needed, for the same reason. */
+body:not([data-ds-dark-theme]) .ef-set__head {
+  border-bottom-color: rgba(20, 24, 26, 0.14);
+}
+
+body:not([data-ds-dark-theme]) .ef-set__head b {
+  color: #14170f;
+}
+
+body:not([data-ds-dark-theme]) .ef-set__head i {
+  color: #646b61;
+}
+
+body:not([data-ds-dark-theme]) .ef-set__range u,
+body:not([data-ds-dark-theme]) .ef-set__number u {
+  color: #6b6a00;
+}
+
+body:not([data-ds-dark-theme]) .ef-set__button {
+  color: #4d4c00;
+  background: rgba(107, 106, 0, 0.08);
+  border-color: rgba(107, 106, 0, 0.38);
+}
+
+body:not([data-ds-dark-theme]) .ef-set__button:hover {
+  background: rgba(107, 106, 0, 0.15);
+  border-color: rgba(107, 106, 0, 0.55);
+}
+
+body:not([data-ds-dark-theme]) .ef-set__button:active {
+  background: rgba(107, 106, 0, 0.22);
+}
+
+body:not([data-ds-dark-theme]) .ef-set__button:focus-visible {
+  outline-color: #6b6a00;
+}
+
+body:not([data-ds-dark-theme]) .ef-set__switch {
+  background: rgba(20, 24, 26, 0.08);
+  border-color: rgba(20, 24, 26, 0.24);
+}
+
+body:not([data-ds-dark-theme]) .ef-set__switch:checked {
+  background: rgba(107, 106, 0, 0.12);
+  border-color: rgba(107, 106, 0, 0.6);
+}
+
+/* The fill is the ::after, not the cell: changing only the cell left a solid hazard-yellow block
+   on paper, which is the one thing that stayed loud in the light variant. */
+body:not([data-ds-dark-theme]) .ef-set__switch::after {
+  background: #6b6a00;
+}
+
+body:not([data-ds-dark-theme]) .ef-set__switch:focus-visible {
+  outline-color: #6b6a00;
+}
+
+body:not([data-ds-dark-theme]) #ef-settings-tab[data-ef-active] {
+  color: #6b6a00;
+}
+
+body:not([data-ds-dark-theme]) #ef-settings-tab[data-ef-active]::before {
+  background: #6b6a00;
 }
 
 body:not([data-ds-dark-theme]) .ef-set__row {
@@ -1117,7 +1286,7 @@ body:not([data-ds-dark-theme]) {
   --dsw-alias-label-primary-inverted: #f7f8f4;
   --dsw-alias-label-secondary: #4a5049;
   --dsw-alias-label-tertiary: #6e756c;
-  --dsw-alias-label-caption: #8c9389;
+  --dsw-alias-label-caption: #646b61;
   --dsw-alias-label-dimmed: #c3c8be;
   --dsw-alias-label-deep-diving: #6b6a00;
   --dsw-alias-label-deep-diving-shimmer: #b3b12a;
@@ -1132,7 +1301,9 @@ body:not([data-ds-dark-theme]) {
   --dsw-alias-markdown-code-segment-selected: rgba(255, 255, 253, 0.95);
   --dsw-alias-markdown-code-segment-unselected: rgba(232, 235, 226, 0.8);
   --dsw-alias-markdown-inline-code: rgba(20, 24, 20, 0.05);
-  --dsw-alias-markdown-placeholder: rgba(222, 226, 216, 0.9);
+  /* Was rgba(222, 226, 216, 0.9): a near-white placeholder on a near-white page, which is where
+     the "the fonts are affected too" half of the report came from. Mid-grey instead. */
+  --dsw-alias-markdown-placeholder: rgba(20, 24, 20, 0.5);
   --dsw-alias-markdown-tag: rgba(138, 136, 0, 0.12);
 
   --dsw-alias-scrollbar-bg-l1: rgba(20, 24, 20, 0.2);

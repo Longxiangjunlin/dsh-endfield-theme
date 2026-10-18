@@ -32,7 +32,7 @@
   var SPLASH_AUDIO = ROOT + '/assets/endfield-boot.mp3'
 
   if (window.__dshEndfieldTheme) return
-  window.__dshEndfieldTheme = { version: '1.3.2' }
+  window.__dshEndfieldTheme = { version: '1.4.0' }
 
   var doc = document
   var html = doc.documentElement
@@ -239,6 +239,11 @@
     warnAt: 5,
     warnVoice: true,
     warnVolume: 90,
+    /* Which rendition of the warning to sound. The in-game clips are 8-9 seconds long, which is
+       a lot of talking for "your balance dipped"; `brief` keeps the beginning and fades out,
+       `beep` is a synthesised two-note chime half a second long, and `custom` uses warnLength. */
+    warnClip: 'voice',
+    warnLength: 2.5,
     pollSeconds: 60,
     gaugeSpan: 4,
   }
@@ -473,21 +478,7 @@
     }
     if (warnedLevel === level || !setting('warnVoice')) return
     warnedLevel = level
-    try {
-      var clip = new window.Audio(
-        ROOT + (level === 'empty' ? '/assets/endfield-no-power.mp3' : '/assets/endfield-low-power.mp3'),
-      )
-      var volume = Number(setting('warnVolume'))
-      clip.volume = isFinite(volume) ? Math.min(1, Math.max(0, volume / 100)) : 0.9
-      var started = clip.play()
-      if (started !== undefined && started !== null && typeof started.catch === 'function') {
-        started.catch(function () {
-          /* refused without a gesture; the gauge still shows the state */
-        })
-      }
-    } catch (err) {
-      /* no audio available is not a reason to skip the readout */
-    }
+    playWarning(level)
   }
 
   function drawBalance() {
@@ -779,6 +770,37 @@
     return wrap
   }
 
+  /**
+   * A select control.
+   *
+   * Native `<select>` rather than a custom menu: the shell renders its own portalled menus inside
+   * the composer card (see the clip-path note in the stylesheet), and a native popup cannot be
+   * clipped, stacked behind something, or captured by a screenshot of the page - which is exactly
+   * what a settings page with four short options needs.
+   */
+  function selectControl(name, options, after) {
+    var wrap = doc.createElement('span')
+    wrap.className = 'ef-set__select'
+    var select = doc.createElement('select')
+    for (var i = 0; i < options.length; i++) {
+      var option = doc.createElement('option')
+      option.value = options[i][0]
+      option.textContent = options[i][1]
+      select.appendChild(option)
+    }
+    select.value = String(setting(name))
+    select.addEventListener('change', function () {
+      var next = Object.assign({}, stored || {}, {})
+      next[name] = select.value
+      saveSettings(next)
+      applySettings()
+      syncSettingGates()
+      if (typeof after === 'function') after()
+    })
+    wrap.appendChild(select)
+    return wrap
+  }
+
   function showOwnTab(parts, own) {
     // Hide the SECTION, not the container it lives in: the container is the scroller, and the
     // theme's page is inside it. Hiding the container took the page off screen with it.
@@ -806,11 +828,13 @@
   function syncSettingsControls() {
     var panel = doc.getElementById(SETTINGS_PANEL_ID)
     if (panel === null) return
-    var inputs = panel.querySelectorAll('input[data-ef-setting]')
+    // Selects carry `data-ef-setting` too, so the query is by attribute rather than by tag.
+    var inputs = panel.querySelectorAll('[data-ef-setting]')
     for (var i = 0; i < inputs.length; i++) {
       var input = inputs[i]
       var name = input.getAttribute('data-ef-setting')
-      if (input.type === 'checkbox') input.checked = setting(name) !== false
+      if (input.tagName === 'SELECT') input.value = String(setting(name))
+      else if (input.type === 'checkbox') input.checked = setting(name) !== false
       else input.value = String(setting(name))
     }
     syncSettingGates()
@@ -833,7 +857,22 @@
     warnVoice: 'balance',
     warnAt: 'balance',
     warnVolume: 'warnVoice',
+    warnClip: 'warnVoice',
+    warnLength: 'warnClip',
     gaugeSpan: 'warnAt',
+  }
+
+  /**
+   * Gates that are not "the parent is truthy".
+   *
+   * The length only matters for one of the four renditions, so it is not enough to know that a
+   * master is on: the parent has to be in a particular state. Kept separate from SETTING_PARENT
+   * because that map also decides indentation, and this rule is about availability only.
+   */
+  var SETTING_GATE = {
+    warnLength: function () {
+      return setting('warnClip') === 'custom'
+    },
   }
 
   function settingDepth(name) {
@@ -847,9 +886,13 @@
   }
 
   function settingUsable(name) {
+    var gate = SETTING_GATE[name]
+    if (typeof gate === 'function' && !gate()) return false
     var cursor = SETTING_PARENT[name]
     while (cursor !== undefined) {
       if (!setting(cursor)) return false
+      var nested = SETTING_GATE[cursor]
+      if (typeof nested === 'function' && !nested()) return false
       cursor = SETTING_PARENT[cursor]
     }
     return true
@@ -869,29 +912,163 @@
     for (var i = 0; i < rows.length; i++) {
       var usable = settingUsable(rows[i].getAttribute('data-ef-setting'))
       rows[i].classList.toggle('is-gated', !usable)
-      var inputs = rows[i].querySelectorAll('input')
+      var inputs = rows[i].querySelectorAll('input, select')
       for (var j = 0; j < inputs.length; j++) inputs[j].disabled = !usable
     }
   }
 
-  /** Play one of the warning clips at the configured volume. */
-  function auditionClip(which) {
+  /* ------------------------------------------------------------- warning audio */
+
+  /**
+   * Seconds of each rendition. `voice` is 0, meaning "play the whole clip".
+   *
+   * A length cap rather than trimmed audio files: the thing people want to change is how much
+   * talking they get, one asset can serve every length, and trimming at playback keeps the choice
+   * adjustable from the settings page instead of baked into the package.
+   */
+  var CLIP_SECONDS = { voice: 0, brief: 2.4, beep: 0.5 }
+
+  var audioContext = null
+  var currentClip = null
+
+  function warnVolumeLevel() {
+    var volume = Number(setting('warnVolume'))
+    return isFinite(volume) ? Math.min(1, Math.max(0, volume / 100)) : 0.9
+  }
+
+  function clipSeconds() {
+    var mode = setting('warnClip')
+    if (mode === 'custom') {
+      var seconds = Number(setting('warnLength'))
+      if (!isFinite(seconds) || seconds <= 0) return DEFAULTS.warnLength
+      return Math.min(10, Math.max(0.5, seconds))
+    }
+    var fixed = CLIP_SECONDS[mode]
+    return typeof fixed === 'number' ? fixed : 0
+  }
+
+  function stopCurrentClip() {
+    if (currentClip === null) return
+    if (currentClip.timer !== null) window.clearTimeout(currentClip.timer)
+    if (currentClip.fade !== null) window.clearInterval(currentClip.fade)
     try {
-      var clip = new window.Audio(
-        ROOT + (which === 'empty' ? '/assets/endfield-no-power.mp3' : '/assets/endfield-low-power.mp3'),
-      )
-      var level = Number(setting('warnVolume'))
-      clip.volume = isFinite(level) ? Math.min(1, Math.max(0, level / 100)) : 0.9
-      var started = clip.play()
-      if (started !== undefined && started !== null && typeof started.catch === 'function') {
-        started.catch(function () {
-          /* refused without a gesture; the button is the gesture, so this is rare */
-        })
-      }
+      currentClip.audio.pause()
     } catch (err) {
-      /* no audio is not a failure worth reporting */
+      /* already finished */
+    }
+    currentClip = null
+  }
+
+  /**
+   * A synthesised two-note chime.
+   *
+   * The "too long" complaint is really "I want a signal, not a sentence", and no available asset
+   * is shorter than a sentence. This one is generated, so it ships for nothing, and the two notes
+   * follow the same low/empty split the voice clips use.
+   */
+  function playChime(level, volume) {
+    var Ctor = window.AudioContext || window.webkitAudioContext
+    if (!Ctor) return false
+    try {
+      if (audioContext === null) audioContext = new Ctor()
+      if (audioContext.state === 'suspended') audioContext.resume()
+      var now = audioContext.currentTime
+      var gain = audioContext.createGain()
+      gain.gain.setValueAtTime(0.0001, now)
+      gain.gain.linearRampToValueAtTime(Math.max(0.02, volume * 0.45), now + 0.015)
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.52)
+      gain.connect(audioContext.destination)
+      var osc = audioContext.createOscillator()
+      osc.type = 'triangle'
+      var low = level === 'empty'
+      osc.frequency.setValueAtTime(low ? 520 : 740, now)
+      osc.frequency.setValueAtTime(low ? 390 : 590, now + 0.13)
+      osc.frequency.setValueAtTime(low ? 300 : 470, now + 0.28)
+      osc.connect(gain)
+      osc.start(now)
+      osc.stop(now + 0.55)
+      return true
+    } catch (err) {
+      return false
     }
   }
+
+  /**
+   * Sound the warning for `level`, honouring the chosen rendition and length.
+   *
+   * One path for both the real warning and the audition buttons, so trying a setting hears exactly
+   * what the warning will do - the previous revision had the audition bypass the volume control's
+   * own path, which made "试听" a weaker test than it looked.
+   */
+  function playWarning(level) {
+    var volume = warnVolumeLevel()
+    stopCurrentClip()
+    if (volume <= 0) return
+    if (setting('warnClip') === 'beep') {
+      if (playChime(level, volume)) return
+      /* No WebAudio: fall through to the clip rather than staying silent. */
+    }
+    var cap = clipSeconds()
+    try {
+      var audio = new window.Audio(
+        ROOT + (level === 'empty' ? '/assets/endfield-no-power.mp3' : '/assets/endfield-low-power.mp3'),
+      )
+      audio.volume = volume
+      currentClip = { audio: audio, timer: null, fade: null }
+      var started = audio.play()
+      if (started !== undefined && started !== null && typeof started.catch === 'function') {
+        started.catch(function () {
+          /* refused without a gesture; the gauge still shows the state */
+        })
+      }
+      if (cap > 0) scheduleStop(cap, volume)
+    } catch (err) {
+      /* no audio available is not a reason to skip the readout */
+    }
+  }
+
+  /**
+   * Fade the tail of the clip out and stop at `cap` seconds.
+   *
+   * A hard cut sounds like a fault, so the last 300ms ramps the volume down instead. The fade and
+   * the stop are both tracked, because a second warning (or an audition) has to be able to cancel
+   * them - otherwise a stale timer would mute the clip that replaced it.
+   */
+  function scheduleStop(cap, volume) {
+    var clip = currentClip
+    if (clip === null) return
+    var fadeAt = Math.max(0, cap - 0.3)
+    clip.timer = window.setTimeout(function () {
+      if (currentClip !== clip) return
+      var steps = 6
+      var step = 0
+      clip.fade = window.setInterval(function () {
+        if (currentClip !== clip) return
+        step += 1
+        try {
+          clip.audio.volume = volume * Math.max(0, 1 - step / steps)
+        } catch (err) {
+          /* the element may already be gone */
+        }
+        if (step >= steps) {
+          window.clearInterval(clip.fade)
+          clip.fade = null
+          try {
+            clip.audio.pause()
+          } catch (err) {
+            /* already stopped */
+          }
+          if (currentClip === clip) currentClip = null
+        }
+      }, (0.3 * 1000) / steps)
+    }, fadeAt * 1000)
+  }
+
+  /** Play one of the warning clips at the configured volume and length. */
+  function auditionClip(which) {
+    playWarning(which)
+  }
+
 
   /** A button in the settings page, styled by `.ef-set__button`. */
   function panelButton(label, onClick) {
@@ -1161,9 +1338,20 @@
       ['balance', 'toggle', '侧栏电力储备', '把账户余额画成电量计'],
       ['pollSeconds', 'number', '余额刷新间隔', '最小 15 秒'],
       ['warnVoice', 'toggle', '余额语音播报', '低于阈值 / 耗尽时播报'],
+      ['warnClip', 'select', '播报版本', '完整语音约 9 秒；简短 / 提示音更利落'],
+      ['warnLength', 'number', '播报时长', '仅「自定义」生效，0.5–10 秒'],
       ['warnVolume', 'range', '播报音量', '拖动即试听'],
       ['warnAt', 'number', '预警阈值', '余额低于它播报一次'],
       ['gaugeSpan', 'range', '电量计满量程', '阈值 × 这个倍数 = 满格'],
+    ]
+
+    /* The four renditions offered for 播报版本. Values are what `warnClip` stores; the labels say
+       how long each one runs, because "how long" is the question this setting exists to answer. */
+    var WARN_CLIPS = [
+      ['voice', '完整语音（约 9 秒）'],
+      ['brief', '简短（约 2.4 秒）'],
+      ['beep', '提示音（0.5 秒）'],
+      ['custom', '自定义时长'],
     ]
 
     for (var i = 0; i < spec.length; i++) {
@@ -1171,11 +1359,17 @@
       var kind = spec[i][1]
       var control
       if (kind === 'toggle') control = toggleControl(name)
+      else if (kind === 'select') control = selectControl(name, WARN_CLIPS, function () { auditionClip('low') })
       else if (kind === 'range') {
         if (name === 'crtStrength') control = rangeControl(name, 0, 60, '%')
         else if (name === 'warnVolume') control = rangeControl(name, 0, 100, '%', function () { auditionClip('low') })
         else control = rangeControl(name, 2, 12, 'x', drawBalance)
       } else if (name === 'pollSeconds') control = numberControl(name, 15, 600, '秒', startBalanceTimer)
+      else if (name === 'warnLength') {
+        control = numberControl(name, 0.5, 10, '秒', function () { auditionClip('low') })
+        // Half-second steps: the whole point is choosing a length shorter than the clip.
+        control.firstChild.step = '0.5'
+      }
       else control = numberControl(name, 0, 9999, '元')
 
       if (control.tagName === 'INPUT') control.setAttribute('data-ef-setting', name)
@@ -1261,6 +1455,12 @@
     // Inside the scroller, right after the section it replaces - so it scrolls with the
     // dialog's own content instead of sitting outside it and running past the fold.
     parts.options.insertBefore(buildSettingsPanel(), parts.section.nextSibling)
+
+    // Gates again, now that the panel is in the document. buildSettingsPanel() calls
+    // syncSettingGates() before returning, but at that moment the panel is still detached - the
+    // lookup is by id from the document, so it found nothing and returned silently. The result
+    // was that on first open every dependent row looked usable until the user touched something.
+    syncSettingGates()
   }
 
   /**
