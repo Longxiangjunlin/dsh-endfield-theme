@@ -1647,10 +1647,20 @@ body:not([data-ds-dark-theme]) {
   border-radius: 3px;
 }
 
+/* The caret is a 1px vertical line, so it needs more contrast than body text, not less. Hazard
+   yellow reads on charcoal but disappears on paper (1.1:1 against the light composer), which is
+   what "the cursor is too faint" was about; in dark mode it moves to the lighter accent so it is
+   not mistaken for a slightly-lit gap. */
 [data-slot='conversation.composer'] textarea,
 [data-slot='conversation.composer'] [contenteditable='true'],
 [data-composer-input] {
-  caret-color: var(--ef-y);
+  caret-color: #fbfa6a;
+}
+
+body:not([data-ds-dark-theme]) [data-slot='conversation.composer'] textarea,
+body:not([data-ds-dark-theme]) [data-slot='conversation.composer'] [contenteditable='true'],
+body:not([data-ds-dark-theme]) [data-composer-input] {
+  caret-color: #14170f;
 }
 
 /* Small radius scale: the shell's default 12–28px pills read as a consumer app,

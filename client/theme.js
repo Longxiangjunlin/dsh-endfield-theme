@@ -31,8 +31,21 @@
   /** Boot sting. Missing or refused is fine - the animation does not depend on it. */
   var SPLASH_AUDIO = ROOT + '/assets/endfield-boot.mp3'
 
+  /**
+   * The built-in clips, one per announcement.
+   *
+   * These are the A.I.C system voice: the same character set every profile gets, and the fallback
+   * for every voice-pack slot a user has not filled. A pack is a folder of files served from the
+   * host; see VOICE.md for the layout and for the three lines in all three languages.
+   */
+  var BUILTIN_VOICE = {
+    boot: SPLASH_AUDIO,
+    low: ROOT + '/assets/endfield-low-power.mp3',
+    empty: ROOT + '/assets/endfield-no-power.mp3',
+  }
+
   if (window.__dshEndfieldTheme) return
-  window.__dshEndfieldTheme = { version: '1.4.0' }
+  window.__dshEndfieldTheme = { version: '1.5.0' }
 
   var doc = document
   var html = doc.documentElement
@@ -244,6 +257,10 @@
        `beep` is a synthesised two-note chime half a second long, and `custom` uses warnLength. */
     warnClip: 'voice',
     warnLength: 2.5,
+    /* '' means the built-in A.I.C voice. Otherwise a folder name under the host's voice
+       directory; voiceLang picks which of zh / en / ja from inside it. */
+    voicePack: '',
+    voiceLang: 'en',
     pollSeconds: 60,
     gaugeSpan: 4,
   }
@@ -859,6 +876,7 @@
     warnVolume: 'warnVoice',
     warnClip: 'warnVoice',
     warnLength: 'warnClip',
+    voiceLang: 'voicePack',
     gaugeSpan: 'warnAt',
   }
 
@@ -915,6 +933,77 @@
       var inputs = rows[i].querySelectorAll('input, select')
       for (var j = 0; j < inputs.length; j++) inputs[j].disabled = !usable
     }
+  }
+
+  /* --------------------------------------------------------------- voice packs */
+
+  var voicePacks = []
+
+  /**
+   * Which file an announcement should use, right now.
+   *
+   * A pack supplies a per-clip, per-language file; anything it does not supply falls back to the
+   * built-in A.I.C clip rather than going silent, so selecting a pack with only one language does
+   * not break the other two. The fallback is also what a fresh install hears.
+   */
+  function voiceClipUrl(kind) {
+    var pack = String(setting('voicePack') || '')
+    var lang = String(setting('voiceLang') || 'en')
+    if (pack !== '') {
+      var found = null
+      for (var i = 0; i < voicePacks.length; i++) {
+        if (voicePacks[i].name === pack) found = voicePacks[i]
+      }
+      if (found !== null && found.clips[kind] !== undefined && found.clips[kind][lang] !== undefined) {
+        return ROOT + '/voice/' + encodeURIComponent(pack) + '/' + encodeURIComponent(found.clips[kind][lang])
+      }
+    }
+    return BUILTIN_VOICE[kind] || BUILTIN_VOICE.low
+  }
+
+  /** Ask the host which packs exist. Absent host route or empty folder both mean "built-in only". */
+  function loadVoicePacks() {
+    try {
+      window
+        .fetch(ROOT + '/voice-packs', { credentials: 'same-origin' })
+        .then(function (response) { return response.ok ? response.json() : null })
+        .then(function (payload) {
+          if (payload !== null && Array.isArray(payload.packs)) voicePacks = payload.packs
+          refreshVoicePackOptions()
+        })
+        .catch(function () {
+          /* the picker stays on the built-in voice */
+        })
+    } catch (err) {
+      /* no fetch: same outcome */
+    }
+  }
+
+  /**
+   * Rebuild the pack options off `voicePacks`.
+   *
+   * The select is created before the list has arrived, so it starts with only the built-in entry
+   * and is repopulated when the fetch settles - which is also what makes a pack dropped into the
+   * folder appear after a page refresh.
+   */
+  function refreshVoicePackOptions() {
+    var panel = doc.getElementById(SETTINGS_PANEL_ID)
+    if (panel === null) return
+    var select = panel.querySelector('select[data-ef-setting="voicePack"]')
+    if (select === null) return
+    var current = String(setting('voicePack') || '')
+    while (select.firstChild !== null) select.removeChild(select.firstChild)
+    var builtIn = doc.createElement('option')
+    builtIn.value = ''
+    builtIn.textContent = '内置 A.I.C 系统语音'
+    select.appendChild(builtIn)
+    for (var i = 0; i < voicePacks.length; i++) {
+      var option = doc.createElement('option')
+      option.value = voicePacks[i].name
+      option.textContent = voicePacks[i].name + '（' + voicePacks[i].count + ' 条）'
+      select.appendChild(option)
+    }
+    select.value = current
   }
 
   /* ------------------------------------------------------------- warning audio */
@@ -1010,9 +1099,7 @@
     }
     var cap = clipSeconds()
     try {
-      var audio = new window.Audio(
-        ROOT + (level === 'empty' ? '/assets/endfield-no-power.mp3' : '/assets/endfield-low-power.mp3'),
-      )
+      var audio = new window.Audio(voiceClipUrl(level))
       audio.volume = volume
       currentClip = { audio: audio, timer: null, fade: null }
       var started = audio.play()
@@ -1330,6 +1417,8 @@
     var spec = [
       ['splash', 'toggle', '开屏动画', '每次加载播一次，约 2.9 s · 修改后重启客户端生效'],
       ['bootAudio', 'toggle', '开屏音效', '开屏时播放的那条提示音 · 修改后重启客户端生效'],
+      ['voicePack', 'select', '播报角色', '内置为 A.I.C 系统语音；角色语音包放在 ~/.dsh/endfield-voice'],
+      ['voiceLang', 'select', '播报语言', '取决于语音包里提供了哪些语言'],
       ['brand', 'toggle', '替换侧栏品牌位', '换成终末地 lockup · 修改后重启客户端生效'],
       ['crt', 'toggle', '屏幕细纹', '静态扫描线，不占每帧预算'],
       ['crtStrength', 'range', '细纹强度', '0 = 关闭'],
@@ -1354,12 +1443,28 @@
       ['custom', '自定义时长'],
     ]
 
+    var VOICE_LANGS = [
+      ['zh', '中文'],
+      ['en', 'English'],
+      ['ja', '日本語'],
+    ]
+
     for (var i = 0; i < spec.length; i++) {
       var name = spec[i][0]
       var kind = spec[i][1]
       var control
       if (kind === 'toggle') control = toggleControl(name)
-      else if (kind === 'select') control = selectControl(name, WARN_CLIPS, function () { auditionClip('low') })
+      else if (kind === 'select') {
+        if (name === 'voicePack') {
+          // Only the built-in entry for now: the list arrives from the host and is filled in by
+          // refreshVoicePackOptions() once the panel is in the document.
+          control = selectControl(name, [['', '内置 A.I.C 系统语音']], function () { auditionClip('boot') })
+        } else if (name === 'voiceLang') {
+          control = selectControl(name, VOICE_LANGS, function () { auditionClip('low') })
+        } else {
+          control = selectControl(name, WARN_CLIPS, function () { auditionClip('low') })
+        }
+      }
       else if (kind === 'range') {
         if (name === 'crtStrength') control = rangeControl(name, 0, 60, '%')
         else if (name === 'warnVolume') control = rangeControl(name, 0, 100, '%', function () { auditionClip('low') })
@@ -1461,6 +1566,7 @@
     // lookup is by id from the document, so it found nothing and returned silently. The result
     // was that on first open every dependent row looked usable until the user touched something.
     syncSettingGates()
+    refreshVoicePackOptions()
   }
 
   /**
@@ -1664,7 +1770,7 @@
     function startAudio() {
       if (setting('bootAudio') === false) return
       try {
-        audio = new window.Audio(SPLASH_AUDIO)
+        audio = new window.Audio(voiceClipUrl('boot'))
         audio.volume = 0.9
         var started = audio.play()
         if (started !== undefined && started !== null && typeof started.catch === 'function') {
@@ -1804,6 +1910,8 @@
     ensureBackdrop()
     syncThemeColor()
     syncConversationState()
+    // One fetch for the voice-pack list, so the settings picker is populated before it is opened.
+    loadVoicePacks()
 
     // The shell renders its columns after this script runs, so the frame has to
     // wait for the conversation column to exist: pump on rAF until it does, then
