@@ -261,6 +261,9 @@
        directory; voiceLang picks which of zh / en / ja from inside it. */
     voicePack: '',
     voiceLang: 'en',
+    /* Which installed system voice to speak with when voicePack is 'system'. '' follows the
+       language setting instead of a specific voice. */
+    systemVoice: '',
     pollSeconds: 60,
     gaugeSpan: 4,
   }
@@ -891,6 +894,10 @@
     warnLength: function () {
       return setting('warnClip') === 'custom'
     },
+    // Which installed voice only matters for the synthesised source.
+    systemVoice: function () {
+      return String(setting('voicePack') || '') === 'system'
+    },
   }
 
   function settingDepth(name) {
@@ -938,6 +945,158 @@
   /* --------------------------------------------------------------- voice packs */
 
   var voicePacks = []
+
+  /**
+   * The three announcements, written to be spoken rather than read.
+   *
+   * These are what the system-voice option says. The English is the game's own wording; the
+   * Chinese and Japanese are written as facility announcements (see VOICE.md for why each choice
+   * was made - 警告 with a comma rather than an exclamation, 予備電力 rather than "no power").
+   */
+  var SYSTEM_LINES = {
+    boot: {
+      zh: '正在进入 A.I.C 核心区。',
+      en: 'Entering core A.I.C. area.',
+      ja: 'A.I.C コア区画へ進入します。',
+    },
+    low: {
+      zh: '警告，电力输出不足。',
+      en: 'Alert. Insufficient power output.',
+      ja: '警告。電力出力が不足しています。',
+    },
+    empty: {
+      zh: '警告，电网储备电力已耗尽。',
+      en: 'Warning. Electrical grid reserves depleted.',
+      ja: '警告。電力網の予備電力が枯渇しました。',
+    },
+  }
+
+  var LANG_TAGS = { zh: 'zh-CN', en: 'en-US', ja: 'ja-JP' }
+
+  /** The installed voices that can speak one of our three languages. */
+  function systemVoices() {
+    try {
+      if (typeof window.speechSynthesis === 'undefined' || window.speechSynthesis === null) return []
+      var all = window.speechSynthesis.getVoices() || []
+      var out = []
+      for (var i = 0; i < all.length; i++) {
+        if (/^(zh|en|ja)/i.test(all[i].lang || '')) out.push(all[i])
+      }
+      return out
+    } catch (err) {
+      return []
+    }
+  }
+
+  /**
+   * Speak one announcement with a system voice.
+   *
+   * Returns false when there is no synthesiser or no installed voice for the language, so the
+   * caller can fall back to the recorded clip instead of going silent. The length cap applies
+   * here too, by cancelling the utterance - otherwise "简短" would stop working the moment someone
+   * picked a synthesised voice.
+   */
+  function speakSystem(kind) {
+    var synth = window.speechSynthesis
+    var Utterance = window.SpeechSynthesisUtterance
+    if (!synth || typeof Utterance !== 'function') return false
+    var lang = String(setting('voiceLang') || 'en')
+    var text = SYSTEM_LINES[kind] !== undefined ? SYSTEM_LINES[kind][lang] : undefined
+    if (typeof text !== 'string') return false
+    try {
+      var chosen = null
+      var wanted = String(setting('systemVoice') || '')
+      var voices = systemVoices()
+      for (var i = 0; i < voices.length; i++) {
+        if (voices[i].name === wanted) chosen = voices[i]
+      }
+      // Nothing pinned: prefer a voice that already speaks the chosen language.
+      if (chosen === null) {
+        for (var j = 0; j < voices.length; j++) {
+          if ((voices[j].lang || '').toLowerCase().indexOf(lang) === 0) { chosen = voices[j]; break }
+        }
+      }
+      synth.cancel()
+      var utterance = new Utterance(text)
+      if (chosen !== null) {
+        utterance.voice = chosen
+        utterance.lang = chosen.lang
+      } else {
+        utterance.lang = LANG_TAGS[lang] || 'en-US'
+      }
+      utterance.volume = warnVolumeLevel()
+      // A facility announcement reads flat and a little slower than speech.
+      utterance.rate = 0.9
+      utterance.pitch = 1
+      synth.speak(utterance)
+      var cap = clipSeconds()
+      if (cap > 0) {
+        window.setTimeout(function () {
+          try { synth.cancel() } catch (err) { /* already finished */ }
+        }, cap * 1000)
+      }
+      return true
+    } catch (err) {
+      return false
+    }
+  }
+
+  /** Rebuild the 「系统语音」 options from the installed voices. */
+  function refreshSystemVoiceOptions() {
+    var panel = doc.getElementById(SETTINGS_PANEL_ID)
+    if (panel === null) return
+    var select = panel.querySelector('select[data-ef-setting="systemVoice"]')
+    if (select === null) return
+    var current = String(setting('systemVoice') || '')
+    while (select.firstChild !== null) select.removeChild(select.firstChild)
+    var auto = doc.createElement('option')
+    auto.value = ''
+    auto.textContent = '跟随播报语言'
+    select.appendChild(auto)
+    // Chromium reports every installed locale - sixty-odd voices on this machine, most of them
+    // English. Listing only the ones that can speak the chosen language keeps the picker usable
+    // and makes the chooser's job obvious; the auto entry above still covers the rest.
+    var lang = String(setting('voiceLang') || 'en')
+    var all = systemVoices()
+    var voices = []
+    for (var v = 0; v < all.length; v++) {
+      if ((all[v].lang || '').toLowerCase().indexOf(lang) === 0) voices.push(all[v])
+    }
+    if (voices.length === 0) voices = all
+    for (var i = 0; i < voices.length; i++) {
+      var option = doc.createElement('option')
+      option.value = voices[i].name
+      // "Microsoft Huihui - Chinese (Simplified, PRC)" is unreadable inside a 150px control.
+      option.textContent = voices[i].name
+        .replace(/^Microsoft\s+/i, '')
+        .replace(/\s+-\s+[A-Za-z].*$/, '')
+        .concat(' · ' + voices[i].lang)
+      select.appendChild(option)
+    }
+    if (voices.length === 0) {
+      var none = doc.createElement('option')
+      none.value = ''
+      none.disabled = true
+      none.textContent = '本机没有可用的系统语音'
+      select.appendChild(none)
+    }
+    // A voice pinned under one language cannot speak another, and leaving the setting pointing at
+    // something the picker no longer offers is how a setting starts lying about itself. Clear it.
+    if (current !== '') {
+      var stillThere = false
+      for (var k = 0; k < voices.length; k++) {
+        if (voices[k].name === current) stillThere = true
+      }
+      if (!stillThere) {
+        var next = Object.assign({}, stored || {}, {})
+        next.systemVoice = ''
+        saveSettings(next)
+        select.value = ''
+        return
+      }
+    }
+    select.value = current
+  }
 
   /**
    * Which file an announcement should use, right now.
@@ -995,8 +1154,12 @@
     while (select.firstChild !== null) select.removeChild(select.firstChild)
     var builtIn = doc.createElement('option')
     builtIn.value = ''
-    builtIn.textContent = '内置 A.I.C 系统语音'
+    builtIn.textContent = '内置 A.I.C 录音'
     select.appendChild(builtIn)
+    var system = doc.createElement('option')
+    system.value = 'system'
+    system.textContent = '系统语音（本机合成）'
+    select.appendChild(system)
     for (var i = 0; i < voicePacks.length; i++) {
       var option = doc.createElement('option')
       option.value = voicePacks[i].name
@@ -1097,6 +1260,9 @@
       if (playChime(level, volume)) return
       /* No WebAudio: fall through to the clip rather than staying silent. */
     }
+    // A synthesised voice is a source in its own right; when it cannot speak (no synthesiser, or
+    // no voice for the language) the recorded clip is the fallback rather than silence.
+    if (String(setting('voicePack') || '') === 'system' && speakSystem(level)) return
     var cap = clipSeconds()
     try {
       var audio = new window.Audio(voiceClipUrl(level))
@@ -1417,8 +1583,9 @@
     var spec = [
       ['splash', 'toggle', '开屏动画', '每次加载播一次，约 2.9 s · 修改后重启客户端生效'],
       ['bootAudio', 'toggle', '开屏音效', '开屏时播放的那条提示音 · 修改后重启客户端生效'],
-      ['voicePack', 'select', '播报角色', '内置为 A.I.C 系统语音；角色语音包放在 ~/.dsh/endfield-voice'],
-      ['voiceLang', 'select', '播报语言', '取决于语音包里提供了哪些语言'],
+      ['voicePack', 'select', '播报角色', '内置录音 / 本机合成 / 角色语音包'],
+      ['systemVoice', 'select', '系统语音', '本机安装的语音；跟着语言走或指定一个'],
+      ['voiceLang', 'select', '播报语言', '取决于音源提供了哪些语言'],
       ['brand', 'toggle', '替换侧栏品牌位', '换成终末地 lockup · 修改后重启客户端生效'],
       ['crt', 'toggle', '屏幕细纹', '静态扫描线，不占每帧预算'],
       ['crtStrength', 'range', '细纹强度', '0 = 关闭'],
@@ -1456,11 +1623,20 @@
       if (kind === 'toggle') control = toggleControl(name)
       else if (kind === 'select') {
         if (name === 'voicePack') {
-          // Only the built-in entry for now: the list arrives from the host and is filled in by
-          // refreshVoicePackOptions() once the panel is in the document.
-          control = selectControl(name, [['', '内置 A.I.C 系统语音']], function () { auditionClip('boot') })
+          // Only the sources that need no list for now: the pack list arrives from the host and is
+          // filled in by refreshVoicePackOptions() once the panel is in the document.
+          control = selectControl(name, [
+            ['', '内置 A.I.C 录音'],
+            ['system', '系统语音（本机合成）'],
+          ], function () { auditionClip('boot') })
+        } else if (name === 'systemVoice') {
+          control = selectControl(name, [['', '跟随播报语言']], function () { auditionClip('boot') })
         } else if (name === 'voiceLang') {
-          control = selectControl(name, VOICE_LANGS, function () { auditionClip('low') })
+          // The installed-voice list is filtered by language, so it has to be rebuilt here too.
+          control = selectControl(name, VOICE_LANGS, function () {
+            refreshSystemVoiceOptions()
+            auditionClip('low')
+          })
         } else {
           control = selectControl(name, WARN_CLIPS, function () { auditionClip('low') })
         }
@@ -1567,6 +1743,7 @@
     // was that on first open every dependent row looked usable until the user touched something.
     syncSettingGates()
     refreshVoicePackOptions()
+    refreshSystemVoiceOptions()
   }
 
   /**
@@ -1769,6 +1946,7 @@
      */
     function startAudio() {
       if (setting('bootAudio') === false) return
+      if (String(setting('voicePack') || '') === 'system' && speakSystem('boot')) return
       try {
         audio = new window.Audio(voiceClipUrl('boot'))
         audio.volume = 0.9
@@ -1912,6 +2090,15 @@
     syncConversationState()
     // One fetch for the voice-pack list, so the settings picker is populated before it is opened.
     loadVoicePacks()
+    // Chromium reports installed voices asynchronously; without this the 系统语音 select would be
+    // built (and left empty) before the list exists.
+    try {
+      if (window.speechSynthesis && typeof window.speechSynthesis.addEventListener === 'function') {
+        window.speechSynthesis.addEventListener('voiceschanged', refreshSystemVoiceOptions)
+      }
+    } catch (err) {
+      /* no synthesiser: the option falls back to the recorded clip */
+    }
 
     // The shell renders its columns after this script runs, so the frame has to
     // wait for the conversation column to exist: pump on rAF until it does, then
@@ -1990,6 +2177,27 @@
   window.__dshEndfieldTheme.buildSettings = function buildSettings() {
     ensureSettingsPanel()
     return doc.getElementById(SETTINGS_PANEL_ID) !== null
+  }
+
+  /**
+   * Speak one announcement through the system voice and report what happened.
+   *
+   * Same reason as buildSettings: the only way to exercise this outside the UI. It returns the
+   * error rather than throwing, because "why did it fall back to the recording" is the question
+   * this hook exists to answer.
+   */
+  window.__dshEndfieldTheme.speak = function speak(kind) {
+    try {
+      return {
+        ok: speakSystem(kind),
+        voices: systemVoices().length,
+        lang: String(setting('voiceLang') || ''),
+        source: String(setting('voicePack') || ''),
+        text: (SYSTEM_LINES[kind] || {})[String(setting('voiceLang') || '')] || null,
+      }
+    } catch (err) {
+      return { ok: false, error: String(err) }
+    }
   }
 
   start()
