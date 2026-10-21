@@ -235,8 +235,16 @@
     crtStrength: 22,
     turnRail: true,
     conversation: true,
+    /* Which picture sits behind the transcript. 'field' keeps the per-mode default; 'day' forces
+       the snow field in both modes; 'contour' is the generated topographic pattern, which is the
+       option for anyone who cannot have character art on screen at work; 'none' is flat. A
+       'custom:<name>' value points at a file the user put in the host's backdrop folder. */
+    backdrop: 'field',
     balance: true,
     warnAt: 5,
+    /* A second trigger, alongside the amount above: warn when the reserve is worth fewer than this
+       many days at the recent burn rate. 0 leaves only the amount threshold in charge. */
+    warnDays: 0,
     warnVoice: true,
     warnVolume: 90,
     /* Which rendition of the warning to sound. The in-game clips are 8-9 seconds long, which is
@@ -301,9 +309,96 @@
     if (!isFinite(strength)) strength = DEFAULTS.crtStrength
     strength = Math.min(60, Math.max(0, strength))
     html.style.setProperty('--ef-crt-alpha', String(strength / 100))
+    applyBackdrop()
     // Every control's change handler ends up here, so this is the one place that has to keep the
     // dependency greying in step with the values. A no-op until the panel exists.
     syncSettingGates()
+  }
+
+  /* --------------------------------------------------------------- backdrop */
+
+  /**
+   * Swap the picture behind the transcript.
+   *
+   * `--ef-art` is what the stylesheet paints, and it is set per colour scheme on <body> - so the
+   * override has to go on <body> as an inline property, which wins over those rules. 'field'
+   * removes the override and lets the per-mode default back in, so the default stays a default
+   * rather than becoming one hard-coded file.
+   */
+  function applyBackdrop() {
+    var body = doc.body
+    if (body === null) return
+    var choice = String(setting('backdrop') || 'field')
+    if (choice === 'field') {
+      body.style.removeProperty('--ef-art')
+      return
+    }
+    if (choice === 'day') {
+      body.style.setProperty('--ef-art', 'url(' + ROOT + '/assets/endfield-field-day.jpg)')
+      return
+    }
+    if (choice === 'contour') {
+      body.style.setProperty('--ef-art', 'url(' + ROOT + '/assets/endfield-contour.svg)')
+      return
+    }
+    if (choice === 'none') {
+      body.style.setProperty('--ef-art', 'none')
+      return
+    }
+    if (choice.indexOf('custom:') === 0) {
+      body.style.setProperty(
+        '--ef-art',
+        'url(' + ROOT + '/backdrop/' + encodeURIComponent(choice.slice('custom:'.length)) + ')',
+      )
+    }
+  }
+
+  var backdropFiles = []
+
+  /** Ask the host which pictures the user has put in the backdrop folder. */
+  function loadBackdrops() {
+    try {
+      window
+        .fetch(ROOT + '/backdrops', { credentials: 'same-origin' })
+        .then(function (response) { return response.ok ? response.json() : null })
+        .then(function (payload) {
+          if (payload !== null && Array.isArray(payload.files)) backdropFiles = payload.files
+          refreshBackdropOptions()
+        })
+        .catch(function () {
+          /* no host route yet: the built-in choices still work */
+        })
+    } catch (err) {
+      /* as above */
+    }
+  }
+
+  function refreshBackdropOptions() {
+    var panel = doc.getElementById(SETTINGS_PANEL_ID)
+    if (panel === null) return
+    var select = panel.querySelector('select[data-ef-setting="backdrop"]')
+    if (select === null) return
+    var current = String(setting('backdrop') || 'field')
+    while (select.firstChild !== null) select.removeChild(select.firstChild)
+    var choices = [
+      ['field', '炭黑 · 终末地原画'],
+      ['day', '雪原 · 亮底'],
+      ['contour', '等高线（无角色，适合办公）'],
+      ['none', '纯色 · 无底图'],
+    ]
+    for (var i = 0; i < choices.length; i++) {
+      var option = doc.createElement('option')
+      option.value = choices[i][0]
+      option.textContent = choices[i][1]
+      select.appendChild(option)
+    }
+    for (var j = 0; j < backdropFiles.length; j++) {
+      var custom = doc.createElement('option')
+      custom.value = 'custom:' + backdropFiles[j].name
+      custom.textContent = '自备：' + backdropFiles[j].name
+      select.appendChild(custom)
+    }
+    select.value = current
   }
 
   /* ---------------------------------------------------------------- balance */
@@ -412,6 +507,81 @@
     spendBaseline = stored
   }
 
+  /* ------------------------------------------------------- burn rate / days left */
+
+  /**
+   * A second warning trigger: "the reserve is worth fewer than N days".
+   *
+   * The fixed threshold stays exactly as it was - it is predictable and people set it deliberately.
+   * This is added alongside it, because five yuan means very different things at different burn
+   * rates, and the polls the gauge already runs are enough to measure that rate for free.
+   *
+   * Samples are kept as a small ring in localStorage: one per poll, trimmed to seven days, so the
+   * estimate reflects the last week rather than a single unlucky gap. The rate is computed from the
+   * two endpoints of that window, not from every pair, because balance also moves when the account
+   * is topped up and a per-pair average would be dragged by it.
+   */
+  var POLL_KEY = 'dsh-endfield-theme.polls'
+  var POLL_KEEP_MS = 7 * 24 * 60 * 60 * 1000
+  var POLL_LIMIT = 1200
+  var pollSamples = []
+
+  try {
+    var rawPolls = window.localStorage.getItem(POLL_KEY)
+    if (rawPolls !== null) {
+      var parsedPolls = JSON.parse(rawPolls)
+      if (Array.isArray(parsedPolls)) {
+        for (var pi = 0; pi < parsedPolls.length; pi++) {
+          var sample = parsedPolls[pi]
+          if (sample !== null && typeof sample === 'object' && isFinite(sample.t) && isFinite(sample.v)) {
+            pollSamples.push({ t: sample.t, v: sample.v })
+          }
+        }
+      }
+    }
+  } catch (err) {
+    /* a corrupted ring is not worth keeping */
+  }
+
+  function notePoll(amount) {
+    if (!isFinite(amount)) return
+    var now = Date.now()
+    var last = pollSamples.length === 0 ? null : pollSamples[pollSamples.length - 1]
+    // One sample per poll: a refresh-heavy session would otherwise fill the ring with duplicates.
+    if (last !== null && now - last.t < 30000 && Math.abs(last.v - amount) < 0.0001) return
+    pollSamples.push({ t: now, v: amount })
+    while (pollSamples.length > POLL_LIMIT) pollSamples.shift()
+    while (pollSamples.length > 0 && now - pollSamples[0].t > POLL_KEEP_MS) pollSamples.shift()
+    try {
+      window.localStorage.setItem(POLL_KEY, JSON.stringify(pollSamples))
+    } catch (err) {
+      /* the estimate still works for this session */
+    }
+  }
+
+  /**
+   * Days of reserve left at the recent burn rate, or null when it cannot be estimated.
+   *
+   * A top-up inside the window would make the endpoints show negative burn; that is reported as
+   * "cannot estimate" rather than as an infinite reserve, because "plenty left" is the one wrong
+   * answer a warning must never give.
+   */
+  function daysLeft(amount) {
+    if (!isFinite(amount) || pollSamples.length < 2) return null
+    var first = pollSamples[0]
+    var last = pollSamples[pollSamples.length - 1]
+    var hours = (last.t - first.t) / 3600000
+    if (!(hours > 0.25)) return null
+    var spent = first.v - last.v
+    if (!(spent > 0.0001)) return null
+    var perDay = spent / (hours / 24)
+    if (!(perDay > 0)) return null
+    var days = amount / perDay
+    return isFinite(days) ? days : null
+  }
+
+  var balanceDaysLeft = null
+
   function drawSpend() {
     var el = balanceElement === null ? null : balanceElement.querySelector('.ef-power__spend')
     if (el === null) return
@@ -420,16 +590,21 @@
       el.hidden = true
       return
     }
-    var delta = balanceValue - spendBaseline.start
     el.hidden = false
+    var delta = balanceValue - spendBaseline.start
+    var parts = []
     if (Math.abs(delta) < 0.005) {
-      el.textContent = '今日 无变化'
+      parts.push('今日 无变化')
       el.setAttribute('data-sign', 'flat')
-      return
+    } else {
+      var spent = -delta
+      parts.push('今日 ' + (spent > 0 ? '−' : '+') + '¥' + Math.abs(spent).toFixed(2))
+      el.setAttribute('data-sign', spent > 0 ? 'down' : 'up')
     }
-    var spent = -delta
-    el.textContent = '今日 ' + (spent > 0 ? '−' : '+') + '¥' + Math.abs(spent).toFixed(2)
-    el.setAttribute('data-sign', spent > 0 ? 'down' : 'up')
+    if (balanceDaysLeft !== null && balanceDaysLeft < 365) {
+      parts.push('约 ' + Math.max(0, Math.floor(balanceDaysLeft)) + ' 天')
+    }
+    el.textContent = parts.join(' · ')
   }
 
   function walletAmount(value) {
@@ -465,13 +640,20 @@
    * Edge-triggered on purpose: the poll runs every minute, and a level-triggered warning would
    * say "power output insufficient" every minute for as long as the balance stayed low. The
    * level resets when the balance recovers, so the next dip is announced again.
+   *
+   * Two triggers, both optional, neither replacing the other: the amount threshold people set
+   * themselves, and - when 余额可用天数 is above zero - a reserve worth fewer days than that at the
+   * recent burn rate. Either one raises the same 'low' level, so the two share the edge.
    */
   function checkWarning(amount) {
     var threshold = Number(setting('warnAt'))
     if (!isFinite(threshold) || threshold < 0) threshold = DEFAULTS.warnAt
+    var warnDaysValue = Number(setting('warnDays'))
+    if (!isFinite(warnDaysValue) || warnDaysValue < 0) warnDaysValue = 0
     var level = null
     if (amount <= 0) level = 'empty'
     else if (amount < threshold) level = 'low'
+    else if (warnDaysValue > 0 && balanceDaysLeft !== null && balanceDaysLeft < warnDaysValue) level = 'low'
     if (level === null) {
       warnedLevel = null
       return
@@ -515,6 +697,8 @@
       caption.textContent = state === 'empty' ? 'DEPLETED' : state === 'low' ? 'OUTPUT LOW' : 'NOMINAL'
     }
     noteSpend(amount)
+    notePoll(amount)
+    balanceDaysLeft = daysLeft(amount)
     drawSpend()
     checkWarning(amount)
   }
@@ -859,6 +1043,7 @@
     warnVolume: 'warnVoice',
     warnClip: 'warnVoice',
     warnLength: 'warnClip',
+    warnDays: 'balance',
     gaugeSpan: 'warnAt',
   }
 
@@ -1335,6 +1520,7 @@
       ['crtStrength', 'range', '细纹强度', '0 = 关闭'],
       ['turnRail', 'toggle', '轮次索引', '对话左侧的轮次号'],
       ['conversation', 'toggle', '对话区背景', '有对话内容时的主视觉'],
+      ['backdrop', 'select', '对话区底图', '内置 / 等高线 / 自备图片（~/.dsh/endfield-backdrops）'],
       ['balance', 'toggle', '侧栏电力储备', '把账户余额画成电量计'],
       ['pollSeconds', 'number', '余额刷新间隔', '最小 15 秒'],
       ['warnVoice', 'toggle', '余额语音播报', '低于阈值 / 耗尽时播报'],
@@ -1342,6 +1528,7 @@
       ['warnLength', 'number', '播报时长', '仅「自定义」生效，0.5–10 秒'],
       ['warnVolume', 'range', '播报音量', '拖动即试听'],
       ['warnAt', 'number', '预警阈值', '余额低于它播报一次'],
+      ['warnDays', 'number', '余额可用天数', '0 = 关闭；按最近一周的消耗速度折算'],
       ['gaugeSpan', 'range', '电量计满量程', '阈值 × 这个倍数 = 满格'],
     ]
 
@@ -1359,7 +1546,20 @@
       var kind = spec[i][1]
       var control
       if (kind === 'toggle') control = toggleControl(name)
-      else if (kind === 'select') control = selectControl(name, WARN_CLIPS, function () { auditionClip('low') })
+      else if (kind === 'select') {
+        if (name === 'backdrop') {
+          // Seeded with the built-in four; refreshBackdropOptions() adds the user's files once the
+          // host has answered and the panel is in the document.
+          control = selectControl(name, [
+            ['field', '炭黑 · 终末地原画'],
+            ['day', '雪原 · 亮底'],
+            ['contour', '等高线（无角色，适合办公）'],
+            ['none', '纯色 · 无底图'],
+          ])
+        } else {
+          control = selectControl(name, WARN_CLIPS, function () { auditionClip('low') })
+        }
+      }
       else if (kind === 'range') {
         if (name === 'crtStrength') control = rangeControl(name, 0, 60, '%')
         else if (name === 'warnVolume') control = rangeControl(name, 0, 100, '%', function () { auditionClip('low') })
@@ -1370,6 +1570,7 @@
         // Half-second steps: the whole point is choosing a length shorter than the clip.
         control.firstChild.step = '0.5'
       }
+      else if (name === 'warnDays') control = numberControl(name, 0, 60, '天', drawBalance)
       else control = numberControl(name, 0, 9999, '元')
 
       if (control.tagName === 'INPUT') control.setAttribute('data-ef-setting', name)
@@ -1461,6 +1662,7 @@
     // lookup is by id from the document, so it found nothing and returned silently. The result
     // was that on first open every dependent row looked usable until the user touched something.
     syncSettingGates()
+    refreshBackdropOptions()
   }
 
   /**
@@ -1804,6 +2006,8 @@
     ensureBackdrop()
     syncThemeColor()
     syncConversationState()
+    // The user's own backdrop pictures, if the host route exists yet.
+    loadBackdrops()
 
     // The shell renders its columns after this script runs, so the frame has to
     // wait for the conversation column to exist: pump on rAF until it does, then

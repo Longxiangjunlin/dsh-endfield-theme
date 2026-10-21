@@ -16,6 +16,11 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const packageDir = process.env.DSH_ENDFIELD_PKG ?? fileURLToPath(new URL('..', import.meta.url))
 
+// The backdrop directory is resolved from DSH_HOME when the module loads, so point it at a
+// temporary home: the route tests then read and write nothing of the user's.
+const testHome = mkdtempSync(join(tmpdir(), 'ef-home-'))
+process.env.DSH_HOME = testHome
+
 const { default: plugin, stripSelfFromProfile } = await import(
   pathToFileURL(join(packageDir, 'lib/index.js')).href
 )
@@ -256,10 +261,41 @@ assert.match(tapped, /\/dsh-endfield\/theme\.js/)
 assert.ok(tapped.indexOf('<style>') < tapped.indexOf('</body>'))
 assert.equal(taps[0](tapped), tapped, 'tap is idempotent')
 
+// --- backdrops ------------------------------------------------------------
+//
+// The mechanism ships, the pictures do not: these routes serve whatever the user put in the
+// backdrop folder. The tests create one file there and check the list, the bytes, and the refusals.
+const backdropRoot = join(testHome, 'endfield-backdrops')
+mkdirSync(backdropRoot, { recursive: true })
+const pngBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+writeFileSync(join(backdropRoot, 'char-01.png'), pngBytes)
+writeFileSync(join(backdropRoot, 'notes.txt'), 'not an image')
+
+const backdropList = call('/dsh-endfield/backdrops')
+assert.equal(backdropList.status, 200)
+const listed = JSON.parse(backdropList.body.toString('utf8'))
+assert.equal(listed.ok, true)
+assert.equal(listed.files.length, 1, 'only image extensions are listed')
+assert.equal(listed.files[0].name, 'char-01.png')
+assert.equal(listed.files[0].size, pngBytes.length)
+
+const servedImage = call('/dsh-endfield/backdrop/char-01.png')
+assert.equal(servedImage.status, 200)
+assert.equal(servedImage.headers['content-type'], 'image/png')
+assert.ok(servedImage.body.equals(pngBytes), 'bytes come back unchanged')
+
+assert.equal(call('/dsh-endfield/backdrop/notes.txt').status, 404, 'not an image extension')
+assert.equal(call('/dsh-endfield/backdrop/missing.png').status, 404, 'missing file')
+assert.equal(call('/dsh-endfield/backdrop/%2e%2e%2fpackage.json').status, 404, 'encoded traversal refused')
+// A bare encoded `..` is normalised away by the URL parser before the handler ever sees it, so this
+// one answers with the prefix redirect rather than a 404. What matters is that no file is served.
+assert.notEqual(call('/dsh-endfield/backdrop/%2e%2e').status, 200, 'dot-dot never serves a file')
+
 // --- teardown -------------------------------------------------------------
 for (const cleanup of effectCleanups) cleanup()
 assert.equal(routes.length, 0, 'routes disposed')
 assert.equal(taps.length, 0, 'taps disposed')
+rmSync(testHome, { recursive: true, force: true })
 
 
 // --- file hygiene ---------------------------------------------------------
