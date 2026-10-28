@@ -32,7 +32,7 @@
   var SPLASH_AUDIO = ROOT + '/assets/endfield-boot.mp3'
 
   if (window.__dshEndfieldTheme) return
-  window.__dshEndfieldTheme = { version: '1.6.0' }
+  window.__dshEndfieldTheme = { version: '1.7.0' }
 
   var doc = document
   var html = doc.documentElement
@@ -203,6 +203,7 @@
     // theme.css).
     html.style.setProperty('--ef-col-left', Math.round(rect.left) + 'px')
     html.style.setProperty('--ef-col-right', Math.round(rect.right) + 'px')
+    reserveSidebarSpace()
     if (rect.width < 240) {
       frameElement.classList.remove('is-placed')
       return
@@ -252,6 +253,9 @@
        `beep` is a synthesised two-note chime half a second long, and `custom` uses warnLength. */
     warnClip: 'voice',
     warnLength: 2.5,
+    /* Where the power panel sits: '' docks it bottom-left, "x,y" is a dragged position in
+       viewport pixels. Dragging writes this; double-clicking the panel resets it. */
+    powerPos: '',
     pollSeconds: 60,
     gaugeSpan: 4,
   }
@@ -310,6 +314,7 @@
     strength = Math.min(60, Math.max(0, strength))
     html.style.setProperty('--ef-crt-alpha', String(strength / 100))
     applyBackdrop()
+    applyPowerPosition()
     // Every control's change handler ends up here, so this is the one place that has to keep the
     // dependency greying in step with the values. A no-op until the panel exists.
     syncSettingGates()
@@ -400,6 +405,159 @@
     }
     select.value = current
   }
+
+  /* ------------------------------------------------------- panel placement */
+
+  var sideScroller = null
+
+  /**
+   * The sidebar's scrollable list.
+   *
+   * Found by behaviour, not by class: the shell's class names are build hashes, and
+   * [data-slot="sidebar"] is `display: contents` so it has no box to measure. The element that
+   * actually scrolls is the tallest one inside the sidebar whose overflow-y says so.
+   */
+  function sidebarScroller() {
+    var sidebar = doc.querySelector('[data-slot="sidebar"]')
+    if (sidebar === null) return null
+    var found = null
+    var foundHeight = -1
+    var nodes = sidebar.querySelectorAll('*')
+    for (var i = 0; i < nodes.length; i++) {
+      var style = window.getComputedStyle(nodes[i])
+      if (style.overflowY !== 'auto' && style.overflowY !== 'scroll') continue
+      var rect = nodes[i].getBoundingClientRect()
+      if (rect.width < 40 || rect.height < 40) continue
+      if (rect.height > foundHeight) {
+        found = nodes[i]
+        foundHeight = rect.height
+      }
+    }
+    return found
+  }
+
+  /**
+   * Keep the docked panel from covering the list.
+   *
+   * While it is docked, its height plus a gap becomes margin on that scroller, so the list's box
+   * ends above the panel and a longer list overflows into a scrollbar instead of sliding
+   * underneath. While the panel floats somewhere else the space is handed back, because nothing is
+   * covering the list any more.
+   */
+  function reserveSidebarSpace() {
+    if (sideScroller === null || sideScroller.parentNode === null) sideScroller = sidebarScroller()
+    if (sideScroller === null) return
+    if (html.getAttribute('data-ef-power-pos') === 'custom') {
+      sideScroller.style.marginBottom = ''
+      return
+    }
+    var panel = balanceElement
+    if (panel === null || panel.parentNode === null) {
+      sideScroller.style.marginBottom = ''
+      return
+    }
+    var height = panel.offsetHeight
+    // Margin, not padding: padding on this element left its bottom edge where it was (the list's
+    // scrollHeight tracked clientHeight exactly), while margin shrinks the flex item's box and so
+    // moves that edge above the panel.
+    sideScroller.style.marginBottom = Math.round(height + 18) + 'px'
+  }
+
+  function clearPowerPosition() {
+    html.removeAttribute('data-ef-power-pos')
+    html.style.removeProperty('--ef-power-left')
+    html.style.removeProperty('--ef-power-top')
+  }
+
+  /** Apply the stored position: '' docks it, "x,y" pins it where the user left it. */
+  function applyPowerPosition() {
+    var raw = String(setting('powerPos') || '')
+    var parts = raw.split(',')
+    var left = parts.length === 2 ? parseFloat(parts[0]) : NaN
+    var top = parts.length === 2 ? parseFloat(parts[1]) : NaN
+    if (!isFinite(left) || !isFinite(top)) {
+      clearPowerPosition()
+      reserveSidebarSpace()
+      return
+    }
+    // Clamp on apply: a position saved in a bigger window must not put the panel off screen.
+    var width = balanceElement === null ? 260 : balanceElement.offsetWidth
+    var height = balanceElement === null ? 115 : balanceElement.offsetHeight
+    left = Math.max(0, Math.min(Math.max(0, window.innerWidth - width), left))
+    top = Math.max(0, Math.min(Math.max(0, window.innerHeight - height), top))
+    html.setAttribute('data-ef-power-pos', 'custom')
+    html.style.setProperty('--ef-power-left', Math.round(left) + 'px')
+    html.style.setProperty('--ef-power-top', Math.round(top) + 'px')
+    reserveSidebarSpace()
+  }
+
+  /**
+   * Drag the panel.
+   *
+   * Pointer events with capture, so a fast drag does not lose the panel when the pointer leaves it.
+   * The move writes the CSS variables directly (the panel must follow the pointer frame by frame)
+   * and only the drop persists to settings.
+   */
+  function makePowerDraggable(panel) {
+    var offsetX = 0
+    var offsetY = 0
+    var dragging = false
+
+    panel.addEventListener('pointerdown', function (event) {
+      if (event.button !== 0) return
+      var rect = panel.getBoundingClientRect()
+      offsetX = event.clientX - rect.left
+      offsetY = event.clientY - rect.top
+      dragging = true
+      panel.setAttribute('data-ef-dragging', '1')
+      try {
+        panel.setPointerCapture(event.pointerId)
+      } catch (err) {
+        /* capture is a convenience, not a requirement */
+      }
+      event.preventDefault()
+    })
+
+    panel.addEventListener('pointermove', function (event) {
+      if (!dragging) return
+      var left = event.clientX - offsetX
+      var top = event.clientY - offsetY
+      left = Math.max(0, Math.min(Math.max(0, window.innerWidth - panel.offsetWidth), left))
+      top = Math.max(0, Math.min(Math.max(0, window.innerHeight - panel.offsetHeight), top))
+      html.setAttribute('data-ef-power-pos', 'custom')
+      html.style.setProperty('--ef-power-left', Math.round(left) + 'px')
+      html.style.setProperty('--ef-power-top', Math.round(top) + 'px')
+      event.preventDefault()
+    })
+
+    var drop = function (event) {
+      if (!dragging) return
+      dragging = false
+      panel.removeAttribute('data-ef-dragging')
+      try {
+        panel.releasePointerCapture(event.pointerId)
+      } catch (err) {
+        /* already released */
+      }
+      var next = Object.assign({}, stored || {}, {})
+      next.powerPos =
+        html.style.getPropertyValue('--ef-power-left') + ',' + html.style.getPropertyValue('--ef-power-top')
+      saveSettings(next)
+      reserveSidebarSpace()
+    }
+    panel.addEventListener('pointerup', drop)
+    panel.addEventListener('pointercancel', drop)
+
+    panel.addEventListener('dblclick', function () {
+      var next = Object.assign({}, stored || {}, {})
+      next.powerPos = ''
+      saveSettings(next)
+      applyPowerPosition()
+      syncSettingsControls()
+    })
+  }
+
+  /* ------------------------------------------------------- panel placement end */
 
   /* ---------------------------------------------------------------- balance */
 
@@ -783,6 +941,9 @@
     drawBalance()
     refreshBalance()
     startBalanceTimer()
+    makePowerDraggable(balanceElement)
+    applyPowerPosition()
+
   }
 
   /**
@@ -1585,6 +1746,19 @@
     buttons.appendChild(panelButton('输出不足', function () { auditionClip('low') }))
     buttons.appendChild(panelButton('储备耗尽', function () { auditionClip('empty') }))
     list.appendChild(settingsRow('audition', '试听警告音', '立即播放，不改变任何设置', buttons))
+
+    // Panel placement. Dragging is the primary way; this exists so a panel dragged somewhere
+    // useless can be recovered without clearing every other setting.
+    var place = doc.createElement('span')
+    place.className = 'ef-set__buttons'
+    place.appendChild(panelButton('复位到左下角', function () {
+      var next = Object.assign({}, stored || {}, {})
+      next.powerPos = ''
+      saveSettings(next)
+      applyPowerPosition()
+      syncSettingsControls()
+    }))
+    list.appendChild(settingsRow('powerpos', '面板位置', '直接拖动侧栏面板即可移动，双击复位', place))
 
     // Maintenance row: the two operations every settings page of this size needs.
     var tools = doc.createElement('span')

@@ -199,6 +199,27 @@ html[data-ef-crt='off'] #ef-crt {
   --ef-power-accent: var(--ef-power-nominal);
 }
 
+/* Draggable. The panel is fixed at the bottom-left by default, which puts it over the sidebar's
+   scrollable list; while docked, its height is reserved as padding on that list (see
+   reserveSidebarSpace in the script), so a long workspace list scrolls above it instead of
+   disappearing beneath it. Dragging switches to absolute coordinates. */
+#ef-power {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+#ef-power[data-ef-dragging] {
+  cursor: grabbing;
+}
+
+html[data-ef-power-pos='custom'] #ef-power {
+  right: auto;
+  bottom: auto;
+  left: var(--ef-power-left, 10px);
+  top: var(--ef-power-top, 100px);
+}
+
 /* Collapsed to a 55px rail there is no room for a gauge, and the rail already flags itself. */
 html[data-ef-rail='on'] #ef-power {
   display: none;
