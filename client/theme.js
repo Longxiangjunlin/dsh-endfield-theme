@@ -32,7 +32,7 @@
   var SPLASH_AUDIO = ROOT + '/assets/endfield-boot.mp3'
 
   if (window.__dshEndfieldTheme) return
-  window.__dshEndfieldTheme = { version: '1.7.1' }
+  window.__dshEndfieldTheme = { version: '1.7.2' }
 
   var doc = document
   var html = doc.documentElement
@@ -241,6 +241,8 @@
        option for anyone who cannot have character art on screen at work; 'none' is flat. A
        'custom:<name>' value points at a file the user put in the host's backdrop folder. */
     backdrop: 'field',
+    /* The reserve panel folds to one line when this is on; clicking its title flips it. */
+    powerCollapsed: false,
     balance: true,
     warnAt: 5,
     /* A second trigger, alongside the amount above: warn when the reserve is worth fewer than this
@@ -301,6 +303,7 @@
       'data-ef-crt': setting('crt'),
       'data-ef-rail': setting('turnRail'),
       'data-ef-balance': setting('balance'),
+      'data-ef-power-fold': setting('powerCollapsed') ? null : 'off',
     }
     for (var attr in flags) {
       if (flags[attr]) html.removeAttribute(attr)
@@ -752,6 +755,16 @@
     if (caption !== null) {
       caption.textContent = state === 'empty' ? 'DEPLETED' : state === 'low' ? 'OUTPUT LOW' : 'NOMINAL'
     }
+    var miniFigure = balanceElement.querySelector('.ef-power__miniFigure')
+    var miniMeta = balanceElement.querySelector('.ef-power__miniMeta')
+    if (miniFigure !== null) miniFigure.textContent = '¥' + (amount > 0 || amount === 0 ? amount.toFixed(2) : '0.00')
+    if (miniMeta !== null) {
+      var meta = state === 'empty' ? '耗尽' : state === 'low' ? '偏低' : ''
+      if (balanceDaysLeft !== null && balanceDaysLeft < 365) {
+        meta = (meta === '' ? '' : meta + ' · ') + '约 ' + Math.max(0, Math.floor(balanceDaysLeft)) + ' 天'
+      }
+      miniMeta.textContent = meta
+    }
     noteSpend(amount)
     notePoll(amount)
     balanceDaysLeft = daysLeft(amount)
@@ -829,13 +842,35 @@
     balanceElement = doc.createElement('div')
     balanceElement.id = 'ef-power'
     balanceElement.innerHTML =
-      '<div class="ef-power__head"><span>电力储备</span><i>POWER RESERVE</i></div>' +
+      '<div class="ef-power__head" role="button" tabindex="0" aria-label="折叠或展开电力储备">' +
+      '<span>电力储备</span><i>POWER RESERVE</i>' +
+      '<b class="ef-power__mini"><b class="ef-power__miniFigure">——</b>' +
+      '<i class="ef-power__miniMeta"></i></b></div>' +
       '<div class="ef-power__meter"><u class="ef-power__fill"></u>' +
       '<b class="ef-power__ticks"></b></div>' +
       '<div class="ef-power__foot"><b class="ef-power__figure">——</b>' +
       '<i class="ef-power__caption">NO SIGNAL</i></div>' +
       '<div class="ef-power__spend" hidden></div>'
     sidebar.appendChild(balanceElement)
+    var head = balanceElement.querySelector('.ef-power__head')
+    var toggle = function () {
+      var next = Object.assign({}, stored || {}, {})
+      next.powerCollapsed = !setting('powerCollapsed')
+      saveSettings(next)
+      applySettings()
+      drawBalance()
+      // The list's reserved margin follows the panel's height, so it has to be recomputed from the
+      // new size rather than left at the old one.
+      reserveSidebarSpace()
+    }
+    head.addEventListener('click', toggle)
+    head.addEventListener('keydown', function (event) {
+      if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
+        event.preventDefault()
+        toggle()
+      }
+    })
+
     drawBalance()
     refreshBalance()
     startBalanceTimer()
