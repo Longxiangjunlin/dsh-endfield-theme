@@ -219,6 +219,7 @@ for (const asset of named) {
 // map: it still decoded, so nothing failed, but the type was wrong and no check said so.
 for (const [asset, type] of [
   ['endfield-boot.mp3', 'audio/mpeg'],
+  ['endfield-boot-arknights.m4a', 'audio/mp4'],
   ['endfield-emblem.webp', 'image/webp'],
   ['endfield-mark-zh.png', 'image/png'],
   ['endfield-field.jpg', 'image/jpeg'],

@@ -28,11 +28,21 @@
    */
   var SPLASH_FILL_AT_MS = 1450
   var SPLASH_FILL_MS = 1150
-  /** Boot sting. Missing or refused is fine - the animation does not depend on it. */
-  var SPLASH_AUDIO = ROOT + '/assets/endfield-boot.mp3'
+  /** Boot stings. Missing or refused is fine - the animation does not depend on it. */
+  var SPLASH_CLIPS = {
+    classic: ROOT + '/assets/endfield-boot.mp3',
+    arknights: ROOT + '/assets/endfield-boot-arknights.m4a',
+  }
+
+  function splashAudioSource() {
+    var choice = String(setting('bootClip') || 'classic')
+    return Object.prototype.hasOwnProperty.call(SPLASH_CLIPS, choice)
+      ? SPLASH_CLIPS[choice]
+      : SPLASH_CLIPS.classic
+  }
 
   if (window.__dshEndfieldTheme) return
-  window.__dshEndfieldTheme = { version: '1.7.2' }
+  window.__dshEndfieldTheme = { version: '1.7.3' }
 
   var doc = document
   var html = doc.documentElement
@@ -230,6 +240,9 @@
 
   var DEFAULTS = {
     splash: true,
+    /* Which sting plays with the splash: 'classic' is the in-game system announcement,
+       'arknights' is the short voice clip. Only meaningful while bootAudio is on. */
+    bootClip: 'classic',
     bootAudio: true,
     brand: true,
     crt: true,
@@ -1133,6 +1146,7 @@
     warnVoice: 'balance',
     warnAt: 'balance',
     warnVolume: 'warnVoice',
+    bootClip: 'bootAudio',
     warnClip: 'warnVoice',
     warnLength: 'warnClip',
     warnDays: 'balance',
@@ -1607,6 +1621,7 @@
     var spec = [
       ['splash', 'toggle', '开屏动画', '每次加载播一次，约 2.9 s · 修改后重启客户端生效'],
       ['bootAudio', 'toggle', '开屏音效', '开屏时播放的那条提示音 · 修改后重启客户端生效'],
+      ['bootClip', 'select', '开屏音效版本', '经典：系统播报；Arknights：短语音'],
       ['brand', 'toggle', '替换侧栏品牌位', '换成终末地 lockup · 修改后重启客户端生效'],
       ['crt', 'toggle', '屏幕细纹', '静态扫描线，不占每帧预算'],
       ['crtStrength', 'range', '细纹强度', '0 = 关闭'],
@@ -1639,7 +1654,12 @@
       var control
       if (kind === 'toggle') control = toggleControl(name)
       else if (kind === 'select') {
-        if (name === 'backdrop') {
+        if (name === 'bootClip') {
+          control = selectControl(name, [
+            ['classic', '经典 · 集成工业系统播报'],
+            ['arknights', 'Arknights · 短语音'],
+          ])
+        } else if (name === 'backdrop') {
           // Seeded with the built-in four; refreshBackdropOptions() adds the user's files once the
           // host has answered and the panel is in the document.
           control = selectControl(name, [
@@ -1957,7 +1977,7 @@
     function startAudio() {
       if (setting('bootAudio') === false) return
       try {
-        audio = new window.Audio(SPLASH_AUDIO)
+        audio = new window.Audio(splashAudioSource())
         audio.volume = 0.9
         var started = audio.play()
         if (started !== undefined && started !== null && typeof started.catch === 'function') {
